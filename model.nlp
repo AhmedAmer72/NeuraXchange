@@ -1,0 +1,346 @@
+{
+  "settings": {
+    "languages": [
+      "en"
+    ],
+    "forceNER": true,
+    "tag": "nlp",
+    "threshold": 0.5,
+    "autoLoad": true,
+    "autoSave": true,
+    "modelFileName": "model.nlp",
+    "executeActionsBeforeAnswers": false,
+    "calculateSentiment": true
+  },
+  "nluManager": {
+    "settings": {
+      "tag": "nlu-manager"
+    },
+    "locales": [
+      "en"
+    ],
+    "languageNames": {},
+    "domainManagers": {
+      "en": {
+        "settings": {
+          "locale": "en",
+          "trainByDomain": false,
+          "tag": "domain-manager-en",
+          "nluByDomain": {
+            "default": {
+              "className": "NeuralNlu",
+              "settings": {}
+            }
+          },
+          "useStemDict": true
+        },
+        "stemDict": {
+          "@currenc,@number,for,swap": {
+            "intent": "swap.crypto",
+            "domain": "default"
+          },
+          "@currenc,@network,@number,for,i,on,to,trade,want": {
+            "intent": "swap.crypto",
+            "domain": "default"
+          },
+          "@currenc,convert,my,to": {
+            "intent": "swap.crypto",
+            "domain": "default"
+          },
+          "@currenc,@network,@number,on,shift,to": {
+            "intent": "swap.crypto",
+            "domain": "default"
+          },
+          "@currenc,@number,for,trade": {
+            "intent": "swap.crypto",
+            "domain": "default"
+          }
+        },
+        "intentDict": {
+          "swap.crypto": "default"
+        },
+        "sentences": [
+          {
+            "domain": "default",
+            "utterance": "swap @number @currency for @currency",
+            "intent": "swap.crypto"
+          },
+          {
+            "domain": "default",
+            "utterance": "I want to trade @number @currency on @network for @currency",
+            "intent": "swap.crypto"
+          },
+          {
+            "domain": "default",
+            "utterance": "convert my @currency to @currency",
+            "intent": "swap.crypto"
+          },
+          {
+            "domain": "default",
+            "utterance": "shift @number @currency to @currency on @network",
+            "intent": "swap.crypto"
+          },
+          {
+            "domain": "default",
+            "utterance": "trade @number @currency for @currency",
+            "intent": "swap.crypto"
+          }
+        ],
+        "domains": {
+          "master_domain": {
+            "settings": {
+              "locale": "en",
+              "tag": "nlu-en",
+              "keepStopwords": true,
+              "nonefeatureValue": 1,
+              "nonedeltaMultiplier": 1.2,
+              "spellCheck": false,
+              "spellCheckDistance": 1,
+              "filterZeros": true,
+              "log": true
+            },
+            "features": {
+              "swap": 1,
+              "@number": 1,
+              "@currenc": 1,
+              "for": 1,
+              "i": 1,
+              "want": 1,
+              "to": 1,
+              "trade": 1,
+              "on": 1,
+              "@network": 1,
+              "convert": 1,
+              "my": 1,
+              "shift": 1
+            },
+            "intents": {
+              "swap.crypto": 1
+            },
+            "intentFeatures": {
+              "swap.crypto": {
+                "swap": 1,
+                "@number": 1,
+                "@currenc": 1,
+                "for": 1,
+                "i": 1,
+                "want": 1,
+                "to": 1,
+                "trade": 1,
+                "on": 1,
+                "@network": 1,
+                "convert": 1,
+                "my": 1,
+                "shift": 1
+              }
+            },
+            "featuresToIntent": {
+              "swap": [
+                "swap.crypto"
+              ],
+              "@number": [
+                "swap.crypto"
+              ],
+              "@currenc": [
+                "swap.crypto"
+              ],
+              "for": [
+                "swap.crypto"
+              ],
+              "i": [
+                "swap.crypto"
+              ],
+              "want": [
+                "swap.crypto"
+              ],
+              "to": [
+                "swap.crypto"
+              ],
+              "trade": [
+                "swap.crypto"
+              ],
+              "on": [
+                "swap.crypto"
+              ],
+              "@network": [
+                "swap.crypto"
+              ],
+              "convert": [
+                "swap.crypto"
+              ],
+              "my": [
+                "swap.crypto"
+              ],
+              "shift": [
+                "swap.crypto"
+              ]
+            },
+            "neuralNetwork": {
+              "settings": {
+                "locale": "en",
+                "tag": "nlu-en",
+                "keepStopwords": true,
+                "nonefeatureValue": 1,
+                "nonedeltaMultiplier": 1.2,
+                "spellCheck": false,
+                "spellCheckDistance": 1,
+                "filterZeros": true,
+                "log": true
+              },
+              "features": [
+                "swap",
+                "@number",
+                "@currenc",
+                "for",
+                "i",
+                "want",
+                "to",
+                "trade",
+                "on",
+                "@network",
+                "convert",
+                "my",
+                "shift"
+              ],
+              "intents": [
+                "swap.crypto"
+              ],
+              "perceptrons": [
+                [
+                  1.19501531124115,
+                  3.1545424461364746,
+                  5.275940895080566,
+                  2.135037660598755,
+                  -0.9941666126251221,
+                  -0.9941666126251221,
+                  2.142383098602295,
+                  0.9485325217247009,
+                  0.021095579490065575,
+                  0.021095579490065575,
+                  2.122596502304077,
+                  2.122596502304077,
+                  1.0176602602005005,
+                  2.641480745559688
+                ]
+              ]
+            }
+          }
+        }
+      }
+    },
+    "intentDomains": {},
+    "extraSentences": [
+      [
+        "en",
+        "swap @number @currency for @currency"
+      ],
+      [
+        "en",
+        "I want to trade @number @currency on @network for @currency"
+      ],
+      [
+        "en",
+        "convert my @currency to @currency"
+      ],
+      [
+        "en",
+        "shift @number @currency to @currency on @network"
+      ],
+      [
+        "en",
+        "trade @number @currency for @currency"
+      ]
+    ]
+  },
+  "ner": {
+    "settings": {
+      "tag": "ner",
+      "entityPreffix": "%",
+      "entitySuffix": "%"
+    },
+    "rules": {
+      "en": {
+        "currency": {
+          "name": "currency",
+          "type": "enum",
+          "rules": [
+            {
+              "option": "BTC",
+              "texts": [
+                "btc",
+                "bitcoin"
+              ]
+            },
+            {
+              "option": "ETH",
+              "texts": [
+                "eth",
+                "ethereum"
+              ]
+            },
+            {
+              "option": "SOL",
+              "texts": [
+                "sol",
+                "solana"
+              ]
+            },
+            {
+              "option": "USDT",
+              "texts": [
+                "usdt",
+                "tether"
+              ]
+            },
+            {
+              "option": "USDC",
+              "texts": [
+                "usdc"
+              ]
+            }
+          ]
+        },
+        "network": {
+          "name": "network",
+          "type": "enum",
+          "rules": [
+            {
+              "option": "arbitrum",
+              "texts": [
+                "arbitrum",
+                "arb"
+              ]
+            },
+            {
+              "option": "optimism",
+              "texts": [
+                "optimism",
+                "op"
+              ]
+            },
+            {
+              "option": "polygon",
+              "texts": [
+                "polygon",
+                "matic"
+              ]
+            }
+          ]
+        }
+      }
+    }
+  },
+  "nlgManager": {
+    "settings": {
+      "tag": "nlg-manager"
+    },
+    "responses": {}
+  },
+  "actionManager": {
+    "settings": {
+      "tag": "action-manager"
+    },
+    "actions": {}
+  },
+  "slotManager": {}
+}
