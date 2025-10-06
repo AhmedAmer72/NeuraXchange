@@ -6,8 +6,6 @@ Cross-chain cryptocurrency swaps are powerful but often intimidating for everyda
 
 NeuraXchange solves this problem by transforming the complex process of swapping crypto into a simple, secure conversation. It leverages the power of AI and the SideShift API to allow users to perform non-custodial, direct-to-wallet swaps without ever leaving their favorite chat app.
 
-This project was built for the AI + Automation and Zero UI tracks of the SideShift WaveHack Buildathon.   
-
 ✨ Key Features
 🧠 Natural Language Processing: NeuraXchange understands plain English. Users can simply state what they want to trade (e.g., "swap 0.1 ETH on arbitrum for SOL"), and the bot's AI brain extracts all the necessary details.
 
@@ -111,3 +109,4 @@ Ensuring the model.nlp file is committed to the repository so it's available dur
 
 📄 License
 Distributed under the MIT License. See LICENSE for more information.
+
