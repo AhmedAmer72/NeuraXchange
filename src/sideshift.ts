@@ -8,7 +8,6 @@ const sideShiftApi = axios.create({
     headers: {
         'Content-Type': 'application/json',
         'x-sideshift-secret': process.env.SIDESHIFT_SECRET,
-        // IMPORTANT: In production, you must replace this with the user's actual IP address.
         'x-user-ip': '1.2.3.4' 
     }
 });

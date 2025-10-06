@@ -2,7 +2,6 @@ import * as dotenv from 'dotenv';
 import TelegramBot, { Message } from 'node-telegram-bot-api';
 import { NlpManager } from 'node-nlp';
 import * as fs from 'fs';
-// IMPORTANT: Add 'cancelShift' to your imports from sideshift.ts
 import { getQuote, createShift, pollShiftStatus, cancelShift } from './sideshift';
 
 dotenv.config();
@@ -37,8 +36,8 @@ const defaultNetworks: { [key: string]: string } = {
     btc: 'bitcoin',
     eth: 'ethereum',
     sol: 'solana',
-    usdt: 'ethereum', // Default to ethereum, user can specify e.g., "usdt (solana)"
-    usdc: 'ethereum', // Default to ethereum
+    usdt: 'ethereum',
+    usdc: 'ethereum',
 };
 
 const parseCoinAndNetwork = (input: string) => {
@@ -49,7 +48,7 @@ const parseCoinAndNetwork = (input: string) => {
         return { coin, network };
     }
     const coin = input.trim().toLowerCase();
-    return { coin, network: defaultNetworks[coin] }; // Use default network if available
+    return { coin, network: defaultNetworks[coin] };
 };
 
 
@@ -57,10 +56,11 @@ const parseCoinAndNetwork = (input: string) => {
 
 bot.onText(/\/start/, (msg: Message) => {
   const chatId = msg.chat.id;
-  const welcomeMessage = `👋 Welcome! Tell me what you want to swap.\n\nFor example: 'swap 0.1 ETH on arbitrum for SOL'`;
-  bot.sendMessage(chatId, welcomeMessage);
+  const welcomeMessage = `👋 Welcome! Tell me what you want to swap.\n\n*Examples:*\n\`swap 0.1 ETH on arbitrum for SOL\`\n\`/price btc to eth\``;
+  bot.sendMessage(chatId, welcomeMessage, { parse_mode: 'Markdown' });
 });
 
+// UPGRADED CANCELLATION LOGIC
 bot.onText(/\/cancel/, async (msg: Message) => {
     const chatId = msg.chat.id;
     const userState = userConversations[chatId];
@@ -70,28 +70,55 @@ bot.onText(/\/cancel/, async (msg: Message) => {
         return;
     }
 
+    // Case 1: A live order has been created with SideShift
     if (userState.state === 'polling_status' && userState.shiftId) {
-        clearInterval(userState.intervalId);
-        try {
-            await cancelShift(userState.shiftId);
-            bot.sendMessage(chatId, "❌ Your active order has been requested for cancellation.");
-        } catch (error) {
-            bot.sendMessage(chatId, "⚠️ Could not cancel the order via API, it may have already expired or been processed. Please do not send any funds.");
+        clearInterval(userState.intervalId); // Stop polling immediately
+
+        const fiveMinutes = 5 * 60 * 1000;
+        const elapsedTime = Date.now() - userState.createdAt;
+
+        // If it's too early to cancel, schedule it
+        if (elapsedTime < fiveMinutes) {
+            const remainingTime = fiveMinutes - elapsedTime;
+            bot.sendMessage(chatId, `⏳ SideShift orders can only be cancelled after 5 minutes. I have scheduled this order for cancellation in about ${Math.ceil(remainingTime / 60000)} minute(s). Please do not send any funds.`);
+            
+            setTimeout(async () => {
+                try {
+                    // We need to check if the user state still exists before running the scheduled cancel
+                    const currentState = userConversations[chatId];
+                    if (currentState && currentState.shiftId === userState.shiftId) {
+                        await cancelShift(userState.shiftId);
+                        bot.sendMessage(chatId, "✅ Your order has now been successfully cancelled.");
+                    }
+                } catch (error) {
+                    bot.sendMessage(chatId, "⚠️ The scheduled cancellation failed. The order may have expired on its own. Please do not send any funds.");
+                }
+            }, remainingTime);
+
+        } else { // Otherwise, cancel immediately
+            try {
+                await cancelShift(userState.shiftId);
+                bot.sendMessage(chatId, "❌ Your active order has been successfully cancelled.");
+            } catch (error) {
+                bot.sendMessage(chatId, "⚠️ Could not cancel the order via API, it may have already expired or been processed. Please do not send any funds.");
+            }
         }
-    } else {
+    } else { // Case 2: The request is just pending in the bot's memory
         bot.sendMessage(chatId, "❌ Your pending request has been cancelled.");
     }
 
-    delete userConversations[chatId];
+    delete userConversations[chatId]; // Clear the state for this user in all cases
 });
 
-// UPGRADED FEATURE: /price command with network support
+bot.onText(/\/price$/, (msg: Message) => {
+    const chatId = msg.chat.id;
+    const exampleMessage = `Please provide the currencies you want to check.\n\n*Examples:*\n\`/price eth to btc\`\n\`/price eth (arbitrum) to sol\``;
+    bot.sendMessage(chatId, exampleMessage, { parse_mode: 'Markdown' });
+});
+
 bot.onText(/\/price (.+) to (.+)/, async (msg, match) => {
     const chatId = msg.chat.id;
-    if (!match) {
-        bot.sendMessage(chatId, "Please format your request like: /price eth (arbitrum) to sol");
-        return;
-    }
+    if (!match) return;
 
     const from = parseCoinAndNetwork(match[1]);
     const to = parseCoinAndNetwork(match[2]);
@@ -165,6 +192,8 @@ bot.on('message', async (msg: Message) => {
             
             userConversations[chatId].state = 'polling_status';
             userConversations[chatId].shiftId = shift.id;
+            // CORRECTED: Ensure the creation timestamp is stored
+            userConversations[chatId].createdAt = Date.now(); 
             
             const intervalId = setInterval(async () => {
                 if (!userConversations[chatId]) {
@@ -176,7 +205,7 @@ bot.on('message', async (msg: Message) => {
                     bot.sendMessage(chatId, `🔄 Swap Status Update: *${statusResponse.status}*`, { parse_mode: 'Markdown' });
                     userConversations[chatId].lastStatus = statusResponse.status;
                 }
-                if (['complete', 'refunded', 'rejected'].includes(statusResponse.status)) {
+                if (['complete', 'refunded', 'rejected', 'expired'].includes(statusResponse.status)) {
                     clearInterval(intervalId);
                     delete userConversations[chatId];
                 }
