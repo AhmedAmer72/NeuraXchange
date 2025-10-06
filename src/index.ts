@@ -60,7 +60,7 @@ bot.onText(/\/start/, (msg: Message) => {
   bot.sendMessage(chatId, welcomeMessage, { parse_mode: 'Markdown' });
 });
 
-// UPGRADED CANCELLATION LOGIC
+//cancel command 
 bot.onText(/\/cancel/, async (msg: Message) => {
     const chatId = msg.chat.id;
     const userState = userConversations[chatId];
