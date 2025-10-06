@@ -5,19 +5,20 @@ dotenv.config();
 
 const SIDESHIFT_API_URL = 'https://sideshift.ai/api/v2';
 const SIDESHIFT_SECRET = process.env.SIDESHIFT_SECRET;
-const SIDESHIFT_AFFILIATE_ID = process.env.SIDESHIFT_AFFILIATE_ID; // Optional
+const SIDESHIFT_AFFILIATE_ID = process.env.SIDESHIFT_AFFILIATE_ID;
 
-// Only include affiliate ID if it exists and is not the default/invalid one
+// Check if affiliate ID is properly configured
 const shouldIncludeAffiliateId = () => {
   return SIDESHIFT_AFFILIATE_ID && 
          SIDESHIFT_AFFILIATE_ID.trim() !== '' && 
-         SIDESHIFT_AFFILIATE_ID !== 'YOUR_AFFILIATE_ID' &&
-         SIDESHIFT_AFFILIATE_ID !== 'HWIeN12q0'; // This ID is invalid
+         SIDESHIFT_AFFILIATE_ID !== 'YOUR_AFFILIATE_ID';
+  // REMOVED the check for 'HWIeN12q0' - this is your real ID!
 };
 
 console.log('SideShift Environment Check:', {
   hasSecret: !!SIDESHIFT_SECRET,
   hasAffiliateId: !!SIDESHIFT_AFFILIATE_ID,
+  affiliateIdValue: SIDESHIFT_AFFILIATE_ID, // Add this for debugging
   affiliateIdWillBeUsed: shouldIncludeAffiliateId(),
   secretLength: SIDESHIFT_SECRET ? SIDESHIFT_SECRET.length : 0
 });
@@ -85,7 +86,7 @@ export async function getQuote(params: QuoteParams) {
   console.log('Getting quote with params:', params);
   
   try {
-    // Build request data without affiliate ID if it's invalid
+    // Build request data - ALWAYS include affiliate ID if available
     const requestData: any = {
       depositCoin: params.depositCoin,
       settleCoin: params.settleCoin,
@@ -100,12 +101,12 @@ export async function getQuote(params: QuoteParams) {
       requestData.settleNetwork = params.settleNetwork;
     }
     
-    // Only add affiliate ID if it's valid
+    // ALWAYS include affiliate ID if it exists
     if (shouldIncludeAffiliateId()) {
       requestData.affiliateId = SIDESHIFT_AFFILIATE_ID;
-      console.log('Including affiliate ID in request');
+      console.log('Including affiliate ID in quote request:', SIDESHIFT_AFFILIATE_ID);
     } else {
-      console.log('Skipping affiliate ID (not configured or invalid)');
+      console.log('WARNING: No affiliate ID configured - shifts will fail!');
     }
 
     const response = await sideshiftApi.post('/quotes', requestData);
@@ -158,9 +159,13 @@ export async function createShift(params: ShiftParams) {
       requestData.refundAddress = params.refundAddress;
     }
 
-    // Only add affiliate ID if it's valid
+    // MUST include the SAME affiliate ID that was used in the quote
     if (shouldIncludeAffiliateId()) {
       requestData.affiliateId = SIDESHIFT_AFFILIATE_ID;
+      console.log('Including affiliate ID in shift creation:', SIDESHIFT_AFFILIATE_ID);
+    } else {
+      console.error('ERROR: Affiliate ID is required for shift creation!');
+      throw new Error('Affiliate ID is not configured. Cannot create shift.');
     }
 
     const response = await sideshiftApi.post('/shifts/fixed', requestData);
@@ -182,6 +187,12 @@ export async function createShift(params: ShiftParams) {
     
     if (error.response?.status === 400) {
       const errorMessage = error.response?.data?.error?.message || 'Invalid shift parameters';
+      
+      // Check for specific affiliate ID error
+      if (errorMessage.includes('affiliateId')) {
+        throw new Error(`SideShift API Error: ${errorMessage}. Make sure your affiliate ID (${SIDESHIFT_AFFILIATE_ID}) is valid and matches the one used in the quote.`);
+      }
+      
       throw new Error(`SideShift API Error: ${errorMessage}`);
     }
     throw error;
@@ -242,6 +253,23 @@ export async function testSideShiftConnection() {
     // Test getting available coins
     const response = await sideshiftApi.get('/coins');
     console.log(`✅ SideShift API is accessible. Found ${Object.keys(response.data).length} supported coins`);
+    
+    // Also test if affiliate ID is valid by trying to get a test quote
+    if (shouldIncludeAffiliateId()) {
+      try {
+        const testQuote = await getQuote({
+          depositCoin: 'btc',
+          settleCoin: 'eth',
+          depositAmount: '0.001'
+        });
+        console.log('✅ Affiliate ID is valid and working');
+      } catch (error: any) {
+        if (error.message?.includes('affiliateId')) {
+          console.error('❌ Your affiliate ID appears to be invalid');
+        }
+      }
+    }
+    
     return true;
   } catch (error: any) {
     console.error('❌ Failed to connect to SideShift API:', {
