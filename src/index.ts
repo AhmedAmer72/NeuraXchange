@@ -43,12 +43,23 @@ const userConversations: { [key: number]: any } = {};
 // Initialize NLP Manager
 const nlpManager = new NlpManager({ languages: ['en'], forceNER: true });
 
+// Rate limit handling
+let rateLimitRetryAfter: number = 0;
+let rateLimitExpiresAt: number = 0;
+
 // --- Bot Initialization Function ---
 async function initializeBot(): Promise<TelegramBot> {
   try {
     console.log('🚀 Initializing Telegram Bot...');
     
-    // First, create a temporary bot to clear any webhooks
+    // Check if we're still rate limited
+    if (rateLimitExpiresAt > Date.now()) {
+      const waitTime = Math.ceil((rateLimitExpiresAt - Date.now()) / 1000);
+      console.log(`⏳ Still rate limited. Waiting ${waitTime} seconds...`);
+      await new Promise(resolve => setTimeout(resolve, waitTime * 1000));
+    }
+    
+    // First, create a temporary bot to clear any webhooks (but handle rate limits)
     const tempBot = new TelegramBot(token?? '', { polling: false });
     
     try {
@@ -57,7 +68,7 @@ async function initializeBot(): Promise<TelegramBot> {
       
       if (webhookInfo.url) {
         console.log('🧹 Clearing existing webhook:', webhookInfo.url);
-                await tempBot.deleteWebHook();
+        await tempBot.deleteWebHook();
         console.log('✅ Webhook cleared and pending updates dropped');
       } else {
         console.log('✅ No webhook found');
@@ -67,42 +78,79 @@ async function initializeBot(): Promise<TelegramBot> {
       const botInfo = await tempBot.getMe();
       console.log(`🤖 Bot username: @${botInfo.username}`);
       
-    } catch (error) {
-      console.error('⚠️ Error during webhook cleanup:', error);
-    } finally {
-      await tempBot.close();
+    } catch (error: any) {
+      if (error.response && error.response.statusCode === 429) {
+        // Handle rate limiting
+        const retryAfter = parseInt(error.response.body.parameters?.retry_after || '60');
+        rateLimitRetryAfter = retryAfter;
+        rateLimitExpiresAt = Date.now() + (retryAfter * 1000);
+        
+        console.log(`⚠️ Rate limited by Telegram. Need to wait ${retryAfter} seconds.`);
+        console.log(`Will retry at: ${new Date(rateLimitExpiresAt).toLocaleTimeString()}`);
+        
+        // Don't try to close the connection if we're rate limited
+        console.log('Skipping connection close due to rate limit...');
+        
+        // Wait for the rate limit to expire
+        await new Promise(resolve => setTimeout(resolve, retryAfter * 1000 + 1000)); // Add 1 second buffer
+      } else {
+        console.error('⚠️ Error during webhook cleanup:', error.message);
+      }
     }
     
     // Wait a moment to ensure cleanup
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    await new Promise(resolve => setTimeout(resolve, 2000));
     
     // Now create the actual bot with polling
     console.log('📡 Starting bot with polling...');
-    bot = new TelegramBot(token ??'', { 
+    bot = new TelegramBot(token?? '', { 
       polling: {
-        interval: 1000,
+        interval: 2000, // Increased interval to avoid rate limits
         autoStart: true,
         params: {
-          timeout: 10,
+          timeout: 30,
           allowed_updates: ['message', 'callback_query']
         }
       }
     });
     
     // Add polling error handler
-    bot.on('polling_error', (error) => {
+    bot.on('polling_error', (error: any) => {
       console.error('❌ Polling error:', error.message);
       
-      if (error.message?.includes('409')) {
+      if (error.code === 'ETELEGRAM' && error.response?.statusCode === 429) {
+        const retryAfter = parseInt(error.response.body?.parameters?.retry_after || '60');
+        rateLimitRetryAfter = retryAfter;
+        rateLimitExpiresAt = Date.now() + (retryAfter * 1000);
+        
+        console.error(`
+⚠️  RATE LIMITED: Need to wait ${retryAfter} seconds`);
+        console.error(`Will resume at: ${new Date(rateLimitExpiresAt).toLocaleTimeString()}
+`);
+        
+        // Stop polling and restart after the rate limit expires
+        bot.stopPolling();
+        
+        setTimeout(async () => {
+          console.log('Attempting to restart after rate limit...');
+          try {
+            await bot.startPolling();
+            console.log('✅ Polling restarted successfully');
+          } catch (err) {
+            console.error('Failed to restart polling:', err);
+            process.exit(1);
+          }
+        }, (retryAfter + 1) * 1000);
+        
+      } else if (error.message?.includes('409')) {
         console.error('CONFLICT: Another bot instance is running!');
         console.error('Possible solutions:');
         console.error('1. Check if bot is running on Render or another server');
         console.error('2. Check for other local instances');
         console.error('3. Wait 1-2 minutes and restart');
         
-        // Exit to allow process manager to restart
+        // Exit after a delay to allow reading the message
         setTimeout(() => {
-          console.log('Exiting for restart...');
           process.exit(1);
         }, 3000);
       }
@@ -113,6 +161,14 @@ async function initializeBot(): Promise<TelegramBot> {
     
   } catch (error: any) {
     console.error('❌ Failed to initialize bot:', error.message);
+    
+    // Check if it's a rate limit error
+    if (error.code === 'ETELEGRAM' && error.response?.statusCode === 429) {
+      const retryAfter = parseInt(error.response.body?.parameters?.retry_after || '60');
+      console.error(`Rate limited. Please wait ${retryAfter} seconds and try again.`);
+      console.error(`Try again at: ${new Date(Date.now() + retryAfter * 1000).toLocaleTimeString()}`);
+    }
+    
     throw error;
   }
 }
@@ -143,8 +199,23 @@ async function startApplication() {
     // Set up all bot handlers
     setupBotHandlers();
     
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Failed to start application:', error);
+    
+    if (error.code === 'ETELEGRAM' && error.response?.statusCode === 429) {
+      console.log('The bot is currently rate limited by Telegram.');
+      console.log('Please wait a few minutes before trying again.');
+      console.log('The HTTP health check server will continue running.');
+      
+      // Keep the Express server running for health checks
+      app.listen(PORT, () => {
+        console.log(`🌐 HTTP Server listening on port ${PORT} (bot is rate limited)`);
+      });
+      
+      // Don't exit, just wait
+      return;
+    }
+    
     process.exit(1);
   }
 }
@@ -415,8 +486,21 @@ async function gracefulShutdown(signal: string) {
       await bot.stopPolling();
       console.log('✅ Bot polling stopped');
       
-      await bot.close();
-      console.log('✅ Bot connection closed');
+      // Don't try to close if we're rate limited
+      if (rateLimitExpiresAt < Date.now()) {
+        try {
+          await bot.close();
+          console.log('✅ Bot connection closed');
+        } catch (err: any) {
+          if (err.response?.statusCode === 429) {
+            console.log('⚠️ Rate limited, skipping connection close');
+          } else {
+            console.error('Error closing bot:', err.message);
+          }
+        }
+      } else {
+        console.log('⚠️ Skipping connection close due to rate limit');
+      }
     }
     
     process.exit(0);
