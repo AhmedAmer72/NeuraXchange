@@ -37,6 +37,29 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Add this to your index.js or bot.js
+const axios = require('axios'); // npm install axios
+
+// Keep the service alive on Render free tier
+if (process.env.NODE_ENV === 'production') {
+  const RENDER_URL = 'https://neuraxchange.onrender.com';
+  const PING_INTERVAL = 14 * 60 * 1000; // 14 minutes (just under 15)
+  
+  function keepAlive() {
+    axios.get(`${RENDER_URL}/health`)
+      .then(() => console.log(`Keep-alive ping successful at ${new Date().toISOString()}`))
+      .catch((error: any) => {
+  console.error('Keep-alive ping failed:', error.message);
+});
+  }
+  
+  // Start the keep-alive after 1 minute
+  setTimeout(() => {
+    keepAlive(); // Initial ping
+    setInterval(keepAlive, PING_INTERVAL); // Then every 14 minutes
+  }, 60000);
+}
+
 // State management for conversations
 const userConversations: { [key: number]: any } = {};
 
