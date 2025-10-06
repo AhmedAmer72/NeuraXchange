@@ -3,6 +3,7 @@ import TelegramBot, { Message } from 'node-telegram-bot-api';
 import { NlpManager } from 'node-nlp';
 import * as fs from 'fs';
 import { getQuote, createShift, pollShiftStatus, cancelShift } from './sideshift';
+import express from 'express';
 
 dotenv.config();
 
@@ -14,6 +15,31 @@ if (!token) {
 }
 
 const bot = new TelegramBot(token, { polling: true });
+
+// Add Express server for Render
+const app = express();
+const PORT = process.env.PORT || 10000;
+
+app.get('/', (req, res) => {
+  res.json({ 
+    status: 'ok', 
+    message: 'Telegram bot is running',
+    timestamp: new Date().toISOString()
+  });
+});
+
+app.get('/health', (req, res) => {
+  res.json({ 
+    status: 'healthy',
+    uptime: process.uptime(),
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Start the Express server
+app.listen(PORT, () => {
+  console.log(`HTTP Server listening on port ${PORT}`);
+});
 
 // State management for conversations
 const userConversations: { [key: number]: any } = {};
@@ -56,7 +82,10 @@ const parseCoinAndNetwork = (input: string) => {
 
 bot.onText(/\/start/, (msg: Message) => {
   const chatId = msg.chat.id;
-  const welcomeMessage = `👋 Welcome! Tell me what you want to swap.\n\n*Examples:*\n\`swap 0.1 ETH on arbitrum for SOL\`\n\`/price btc to eth\``;
+  const welcomeMessage = `👋 Welcome! Tell me what you want to swap.
+*Examples:*
+\`swap 0.1 ETH on arbitrum for SOL\`
+\`/price btc to eth\``;
   bot.sendMessage(chatId, welcomeMessage, { parse_mode: 'Markdown' });
 });
 
@@ -112,7 +141,10 @@ bot.onText(/\/cancel/, async (msg: Message) => {
 
 bot.onText(/\/price$/, (msg: Message) => {
     const chatId = msg.chat.id;
-    const exampleMessage = `Please provide the currencies you want to check.\n\n*Examples:*\n\`/price eth to btc\`\n\`/price eth (arbitrum) to sol\``;
+    const exampleMessage = `Please provide the currencies you want to check.
+*Examples:*
+\`/price eth to btc\`
+\`/price eth (arbitrum) to sol\``;
     bot.sendMessage(chatId, exampleMessage, { parse_mode: 'Markdown' });
 });
 
@@ -188,7 +220,9 @@ bot.on('message', async (msg: Message) => {
             bot.sendMessage(chatId, '✅ Quote received. Creating your shift...');
             const shift = await createShift({ quoteId: quote.id, settleAddress });
 
-            bot.sendMessage(chatId, `✨ Shift created! Please send exactly ${shift.depositAmount} ${shift.depositCoin.toUpperCase()} to the following address:\n\n\`${shift.depositAddress}\`\n\nI will notify you of any updates. You can type /cancel at any time before sending funds.`, { parse_mode: 'Markdown' });
+            bot.sendMessage(chatId, `✨ Shift created! Please send exactly ${shift.depositAmount} ${shift.depositCoin.toUpperCase()} to the following address:
+\`${shift.depositAddress}\`
+I will notify you of any updates. You can type /cancel at any time before sending funds.`, { parse_mode: 'Markdown' });
             
             userConversations[chatId].state = 'polling_status';
             userConversations[chatId].shiftId = shift.id;
@@ -260,4 +294,17 @@ bot.on('message', async (msg: Message) => {
             bot.sendMessage(chatId, "I'm not sure how to help with that. I can only process swap requests. Try /start to see an example.");
         }
     }
+});
+
+// Graceful shutdown
+process.on('SIGINT', () => {
+    console.log('Bot stopped gracefully');
+    bot.stopPolling();
+    process.exit(0);
+});
+
+process.on('SIGTERM', () => {
+    console.log('Bot stopped gracefully');
+    bot.stopPolling();
+    process.exit(0);
 });
