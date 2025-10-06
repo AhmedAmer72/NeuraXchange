@@ -250,7 +250,7 @@ function setupBotHandlers() {
     const welcomeMessage = `👋 Welcome! Tell me what you want to swap.
 *Examples:*
 \`swap 0.1 ETH on arbitrum for SOL\`
-\`/price btc to eth\``;
+\`/price eth to btc\``;
     bot.sendMessage(chatId, welcomeMessage, { parse_mode: 'Markdown' });
   });
 
