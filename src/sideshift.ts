@@ -141,6 +141,69 @@ export async function getQuote(params: QuoteParams) {
   }
 }
 
+interface QuoteBySettleAmountParams {
+  depositCoin: string;
+  settleCoin: string;
+  settleAmount: string;
+  depositNetwork?: string;
+  settleNetwork?: string;
+}
+
+export async function getQuoteBySettleAmount(params: QuoteBySettleAmountParams) {
+  console.log('Getting quote by settle amount with params:', params);
+  
+  try {
+    const requestData: any = {
+      depositCoin: params.depositCoin,
+      settleCoin: params.settleCoin,
+      settleAmount: params.settleAmount
+    };
+
+    if (params.depositNetwork) {
+      requestData.depositNetwork = params.depositNetwork;
+    }
+    if (params.settleNetwork) {
+      requestData.settleNetwork = params.settleNetwork;
+    }
+    
+    if (shouldIncludeAffiliateId()) {
+      requestData.affiliateId = SIDESHIFT_AFFILIATE_ID;
+      console.log('Including affiliate ID in quote request:', SIDESHIFT_AFFILIATE_ID);
+    } else {
+      console.log('WARNING: No affiliate ID configured - shifts will fail!');
+    }
+
+    const response = await sideshiftApi.post('/quotes', requestData);
+    
+    console.log('✅ Quote received:', {
+      id: response.data.id,
+      rate: response.data.rate,
+      depositAmount: response.data.depositAmount,
+      settleAmount: response.data.settleAmount
+    });
+    
+    return response.data;
+  } catch (error: any) {
+    console.error('❌ Error getting quote by settle amount:', {
+      message: error.message,
+      status: error.response?.status,
+      data: error.response?.data,
+      code: error.code
+    });
+    
+    if (error.response?.status === 400) {
+      const errorMessage = error.response?.data?.error?.message || 'Invalid request parameters';
+      throw new Error(`SideShift API Error: ${errorMessage}`);
+    } else if (error.response?.status === 401) {
+      throw new Error('Authentication failed. Please check your SIDESHIFT_SECRET.');
+    } else if (error.response?.status === 429) {
+      throw new Error('Rate limit exceeded. Please try again later.');
+    } else {
+      throw error;
+    }
+  }
+}
+
 export async function createShift(params: ShiftParams) {
   console.log('Creating shift with params:', {
     quoteId: params.quoteId,
@@ -241,6 +304,22 @@ export async function cancelShift(shiftId: string) {
       const errorMessage = error.response?.data?.error?.message || 'Cannot cancel shift';
       throw new Error(`SideShift API Error: ${errorMessage}`);
     }
+    throw error;
+  }
+}
+
+export async function getAvailableCoins() {
+  console.log('Fetching available coins from SideShift...');
+  try {
+    const response = await sideshiftApi.get('/coins');
+    console.log(`✅ Found ${response.data.length} coins.`);
+    return response.data;
+  } catch (error: any) {
+    console.error('❌ Error fetching coins:', {
+      message: error.message,
+      status: error.response?.status,
+      data: error.response?.data
+    });
     throw error;
   }
 }

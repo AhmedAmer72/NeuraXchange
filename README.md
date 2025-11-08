@@ -107,6 +107,34 @@ Adding the environment variables to the platform's secrets management dashboard.
 
 Ensuring the model.nlp file is committed to the repository so it's available during the build process.
 
+## Agent tools demo
+
+This repository includes a small LangChain-ready `tools` array in `src/agent.ts` and a tiny natural-language parser in `src/nl-parser.ts`.
+
+Quick demo (dry-run): build then run the demo script. It will parse a short natural-language request and show which tool would be called and with what payload.
+
+PowerShell example:
+
+```powershell
+npm install
+npm run build
+node dist/scripts/demo-agent.js "I need 0.3 SOL"
+```
+
+To actually execute the SideShift API calls from the demo script (not recommended on CI), set the required environment variables and enable execution:
+
+```powershell
+$env:SIDESHIFT_SECRET='your_secret';
+$env:SIDESHIFT_AFFILIATE_ID='your_affiliate_id';
+$env:DEMO_EXECUTE='true';
+npm run build; node dist/scripts/demo-agent.js "I need 0.3 SOL"
+```
+
+Notes:
+- The parser is intentionally small and heuristic-based; it maps phrases like "I need 0.3 SOL" to a call to `get_quote_by_settle_amount` with `settleAmount=0.3`.
+- Use `src/agent.ts`'s `tools` array with a LangChain agent if you'd like automated tool-calling from a full LLM.
+- If you want me to wire a live LangChain agent (OpenAI) into a running demo, I can add that as an optional example (requires an OpenAI API key).
+
 📄 License
 Distributed under the MIT License. See LICENSE for more information.
 

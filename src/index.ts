@@ -2,7 +2,9 @@ import * as dotenv from 'dotenv';
 import TelegramBot, { Message } from 'node-telegram-bot-api';
 import { NlpManager } from 'node-nlp';
 import * as fs from 'fs';
-import { getQuote, createShift, pollShiftStatus, cancelShift } from './sideshift';
+import WAValidator from 'multicoin-address-validator';
+import { getQuote, createShift, pollShiftStatus, cancelShift, getAvailableCoins } from './sideshift';
+import { trainAndSaveNlpModel } from './nlp';
 import express from 'express';
 
 dotenv.config();
@@ -199,27 +201,30 @@ async function initializeBot(): Promise<TelegramBot> {
 // --- Main Initialization ---
 async function startApplication() {
   try {
-    // Load NLP model
-    if (fs.existsSync('model.nlp')) {
-      const modelData = fs.readFileSync('model.nlp', 'utf8');
-      nlpManager.import(modelData);
-      console.log('✅ NLP model loaded successfully');
-    } else {
-      console.error('❌ FATAL ERROR: model.nlp not found. Please run `npx ts-node src/nlp.ts` first.');
-      process.exit(1);
-    }
+    console.log('🚀 Starting NeuraXchange Bot...');
+
+    // 1. Fetch live coin data from SideShift
+    const allCoins = await getAvailableCoins();
+
+    // 2. Train the NLP model with the live data
+    await trainAndSaveNlpModel(allCoins);
+
+    // 3. Load the newly trained model
+    const modelData = fs.readFileSync('model.nlp', 'utf8');
+    nlpManager.import(modelData);
+    console.log('✅ NLP model loaded successfully');
     
-    // Initialize the bot
+    // 4. Initialize the bot
     await initializeBot();
     
-    // Start Express server
+    // 5. Start Express server
     app.listen(PORT, () => {
       console.log(`🌐 HTTP Server listening on port ${PORT}`);
     });
     
     console.log('✅ Bot is running! Press Ctrl+C to stop.');
     
-    // Set up all bot handlers
+    // 6. Set up all bot handlers
     setupBotHandlers();
     
   } catch (error: any) {
@@ -391,20 +396,43 @@ function setupBotHandlers() {
 
     // State 2: Awaiting Address
     if (userState && userState.state === 'awaiting_address') {
-      const settleAddress = msg.text;
-      const { amount, fromCurrency, toCurrency, network } = userState.details;
-      
-      try {
-        bot.sendMessage(chatId, '⏳ Fetching a quote from SideShift...');
-        const quote = await getQuote({
-          depositCoin: fromCurrency.toLowerCase(),
-          settleCoin: toCurrency.toLowerCase(),
-          depositAmount: amount.toString(),
-          depositNetwork: network ? network.toLowerCase() : undefined
-        });
+      const settleAddress = msg.text!;
+      const { toCurrency, fromCurrency } = userState.details;
 
-        bot.sendMessage(chatId, '✅ Quote received. Creating your shift...');
-        const shift = await createShift({ quoteId: quote.id, settleAddress });
+      const isValidAddress = WAValidator.validate(settleAddress, toCurrency);
+
+      if (!isValidAddress) {
+        bot.sendMessage(chatId, `⚠️ That doesn't look like a valid ${toCurrency} address. Please double-check and send it again.`);
+        return;
+      }
+      
+      userConversations[chatId].details.settleAddress = settleAddress;
+      userConversations[chatId].state = 'awaiting_refund_address';
+
+      bot.sendMessage(chatId, `✅ Address valid. Now, please provide a refund address for your ${fromCurrency} (optional, type 'skip' if not needed).`);
+      
+      return;
+    }
+
+    // State 3: Awaiting Refund Address
+    if (userState && userState.state === 'awaiting_refund_address') {
+      const refundAddress = msg.text!;
+      const { quoteId, settleAddress, fromCurrency } = userState.details;
+
+      let shiftParams: any = { quoteId, settleAddress };
+
+      if (refundAddress.toLowerCase() !== 'skip') {
+        const isValidRefundAddress = WAValidator.validate(refundAddress, fromCurrency);
+        if (!isValidRefundAddress) {
+          bot.sendMessage(chatId, `⚠️ That doesn't look like a valid ${fromCurrency} refund address. Please double-check and send it again, or type 'skip'.`);
+          return;
+        }
+        shiftParams.refundAddress = refundAddress;
+      }
+
+      try {
+        bot.sendMessage(chatId, '✅ Got it. Creating your shift...');
+        const shift = await createShift(shiftParams);
 
         bot.sendMessage(chatId, `✨ Shift created! Please send exactly ${shift.depositAmount} ${shift.depositCoin.toUpperCase()} to the following address:
 \`${shift.depositAddress}\`
@@ -455,25 +483,42 @@ I will notify you of any updates. You can type /cancel at any time before sendin
         const fromCurrency = currencyEntities[0].option;
         const toCurrency = currencyEntities[1].option;
         const network = networkEntity ? networkEntity.option : undefined;
-        const networkText = network ? ` on ${network}` : '';
 
-        userConversations[chatId] = {
-          state: 'awaiting_confirmation',
-          details: { amount, fromCurrency, toCurrency, network }
-        };
+        try {
+          bot.sendMessage(chatId, '⏳ Fetching a live quote from SideShift...');
+          
+          const quote = await getQuote({
+            depositCoin: fromCurrency.toLowerCase(),
+            settleCoin: toCurrency.toLowerCase(),
+            depositAmount: amount.toString(),
+            depositNetwork: network ? network.toLowerCase() : undefined
+          });
 
-        const confirmationText = `🤔 Got it. You want to swap ${amount} ${fromCurrency}${networkText} for ${toCurrency}. Is this correct?`;
-        
-        bot.sendMessage(chatId, confirmationText, {
-          reply_markup: {
-            inline_keyboard: [
-              [
-                { text: '✅ Confirm', callback_data: 'confirm_swap' },
-                { text: '❌ Cancel', callback_data: 'cancel_swap' }
+          const confirmationText = `🤔 Got it. You want to swap ${quote.depositAmount} ${quote.depositCoin.toUpperCase()} for ~${quote.settleAmount} ${quote.settleCoin.toUpperCase()}. Is this correct?`;
+          
+          userConversations[chatId] = {
+            state: 'awaiting_confirmation',
+            details: { 
+              quoteId: quote.id,
+              toCurrency: quote.settleCoin.toUpperCase(),
+              fromCurrency: quote.depositCoin.toUpperCase()
+            }
+          };
+
+          bot.sendMessage(chatId, confirmationText, {
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  { text: '✅ Confirm', callback_data: 'confirm_swap' },
+                  { text: '❌ Cancel', callback_data: 'cancel_swap' }
+                ]
               ]
-            ]
-          }
-        });
+            }
+          });
+
+        } catch (error) {
+          bot.sendMessage(chatId, `⚠️ Sorry, I couldn't get a quote for that pair. Please check the coin tickers and try again.`);
+        }
 
       } else {
         bot.sendMessage(chatId, "I couldn't understand all the swap details. Please specify the amount, the currency to send, and the currency to receive.");
