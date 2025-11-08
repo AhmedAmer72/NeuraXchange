@@ -13,11 +13,18 @@ interface ExtendedNlpManager extends NlpManager {
 
 interface SideShiftCoin {
     name?: string;
-    symbol?: string;
-    networks?: Array<{
+    coin?: string; // API uses 'coin' instead of 'symbol'
+    networks?: string[] | Array<{
         name?: string;
         network?: string;
     }>;
+    mainnet?: string;
+    tokenDetails?: {
+        [network: string]: {
+            contractAddress: string;
+            decimals: number;
+        };
+    };
 }
 
 export async function trainAndSaveNlpModel(allCoins: any[]) {
@@ -36,7 +43,7 @@ export async function trainAndSaveNlpModel(allCoins: any[]) {
 
     // Dynamically add entities from the live coin list
     for (let i = 0; i < allCoins.length; i++) {
-        const coin = allCoins[i];
+        const coin = allCoins[i] as SideShiftCoin;
         
         try {
             // Type guard and validation
@@ -46,11 +53,11 @@ export async function trainAndSaveNlpModel(allCoins: any[]) {
             }
 
             // Safely access properties
-            const symbol = coin.symbol?.toString();
+            const coinSymbol = coin.coin?.toString();
             const name = coin.name?.toString();
 
-            if (!symbol) {
-                console.warn(`⚠️ Skipping coin without symbol at index ${i}:`, coin);
+            if (!coinSymbol) {
+                console.warn(`⚠️ Skipping coin without 'coin' property at index ${i}:`, coin);
                 continue;
             }
 
@@ -58,7 +65,7 @@ export async function trainAndSaveNlpModel(allCoins: any[]) {
             const synonyms: string[] = [];
             try {
                 if (name) synonyms.push(name.toLowerCase());
-                synonyms.push(symbol.toLowerCase()); // Always include symbol
+                synonyms.push(coinSymbol.toLowerCase()); // Always include coin symbol
             } catch (err) {
                 console.error(`❌ Error processing coin synonyms at index ${i}:`, err);
                 continue;
@@ -68,7 +75,7 @@ export async function trainAndSaveNlpModel(allCoins: any[]) {
             try {
                 manager.addNamedEntityText(
                     'currency',
-                    symbol.toLowerCase(),
+                    coinSymbol.toLowerCase(),
                     ['en'],
                     synonyms
                 );
@@ -81,27 +88,49 @@ export async function trainAndSaveNlpModel(allCoins: any[]) {
             if (coin.networks && Array.isArray(coin.networks)) {
                 for (const network of coin.networks) {
                     try {
-                        if (!network || typeof network !== 'object') continue;
-                        
-                        const networkId = network.network?.toString();
-                        const networkName = network.name?.toString();
-                        
-                        if (!networkId) continue;
+                        // Handle both string[] and object[] network formats
+                        if (typeof network === 'string') {
+                            manager.addNamedEntityText(
+                                'network',
+                                network.toLowerCase(),
+                                ['en'],
+                                [network.toLowerCase()]
+                            );
+                        } else if (typeof network === 'object' && network) {
+                            const networkId = network.network?.toString();
+                            const networkName = network.name?.toString();
+                            
+                            if (!networkId) continue;
 
-                        const networkSynonyms: string[] = [];
-                        if (networkName) networkSynonyms.push(networkName.toLowerCase());
-                        networkSynonyms.push(networkId.toLowerCase());
+                            const networkSynonyms: string[] = [];
+                            if (networkName) networkSynonyms.push(networkName.toLowerCase());
+                            networkSynonyms.push(networkId.toLowerCase());
 
-                        manager.addNamedEntityText(
-                            'network',
-                            networkId.toLowerCase(),
-                            ['en'],
-                            networkSynonyms
-                        );
+                            manager.addNamedEntityText(
+                                'network',
+                                networkId.toLowerCase(),
+                                ['en'],
+                                networkSynonyms
+                            );
+                        }
                     } catch (err) {
-                        console.error(`❌ Error processing network for coin ${symbol}:`, err);
+                        console.error(`❌ Error processing network for coin ${coinSymbol}:`, err);
                         continue;
                     }
+                }
+            }
+
+            // Add mainnet as a network if present
+            if (coin.mainnet) {
+                try {
+                    manager.addNamedEntityText(
+                        'network',
+                        coin.mainnet.toLowerCase(),
+                        ['en'],
+                        [coin.mainnet.toLowerCase()]
+                    );
+                } catch (err) {
+                    console.error(`❌ Error adding mainnet network for coin ${coinSymbol}:`, err);
                 }
             }
         } catch (err) {
