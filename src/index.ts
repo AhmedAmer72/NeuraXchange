@@ -278,8 +278,54 @@ function setupBotHandlers() {
     const welcomeMessage = `👋 Welcome! Tell me what you want to swap.
 *Examples:*
 \`swap 0.1 ETH on arbitrum for SOL\`
-\`/price eth to btc\``;
+\`/price eth to btc\`
+\`/coins\` - List available coins`;
     bot.sendMessage(chatId, welcomeMessage, { parse_mode: 'Markdown' });
+  });
+
+  // Coins command - Show available coins and networks
+  bot.onText(/\/coins/, async (msg: Message) => {
+    const chatId = msg.chat.id;
+    try {
+      bot.sendMessage(chatId, "⏳ Fetching available coins...");
+      const coins = await getAvailableCoins();
+      
+      // Group coins by network for better organization
+      const networkMap = new Map<string, Set<string>>();
+      let totalCoins = 0;
+      
+      coins.forEach((coin: any) => {
+        totalCoins++;
+        const networks = Array.isArray(coin.networks) ? coin.networks : [];
+        networks.forEach((network: string | { network: string }) => {
+          const networkName = typeof network === 'string' ? network : network.network;
+          if (!networkMap.has(networkName)) {
+            networkMap.set(networkName, new Set());
+          }
+          networkMap.get(networkName)?.add(coin.coin.toUpperCase());
+        });
+      });
+
+      // Build the response message
+      let message = `🏦 *Available Coins and Networks*\n`;
+      message += `Total coins: ${totalCoins}\n`;
+      message += `Total networks: ${networkMap.size}\n\n`;
+      
+      // Add network summaries
+      const networkSummaries = Array.from(networkMap.entries())
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([network, coins]) => 
+          `*${network}*: ${coins.size} coins\n_Examples: ${Array.from(coins).slice(0, 3).join(', ')}${coins.size > 3 ? '...' : ''}_`
+        );
+      
+      message += networkSummaries.join('\n\n');
+      
+      message += '\n\nUse `/price <coin1> to <coin2>` to check exchange rates.';
+      
+      bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
+    } catch (error) {
+      bot.sendMessage(chatId, "⚠️ Sorry, I couldn't fetch the coin list right now. Please try again later.");
+    }
   });
 
   // Cancel command 
