@@ -275,11 +275,11 @@ function setupBotHandlers() {
 
   bot.onText(/\/start/, (msg: Message) => {
     const chatId = msg.chat.id;
-    const welcomeMessage = `👋 Welcome! Tell me what you want to swap.
-*Examples:*
-\`swap 0.1 ETH on arbitrum for SOL\`
-\`/price eth to btc\`
-\`/coins\` - List available coins`;
+    const welcomeMessage = `👋 Welcome to NeuraXchange! What would you like to do?\n\n` +
+      `💬 You can:\n` +
+      `• Just tell me what you want to swap (e.g. "swap 0.1 ETH for SOL")\n` +
+      `• Check prices with /price (e.g. "/price eth to btc")\n` +
+      `• See all available coins with /coins`;
     bot.sendMessage(chatId, welcomeMessage, { parse_mode: 'Markdown' });
   });
 
@@ -540,7 +540,15 @@ I will notify you of any updates. You can type /cancel at any time before sendin
             depositNetwork: network ? network.toLowerCase() : undefined
           });
 
-          const confirmationText = `🤔 Got it. You want to swap ${quote.depositAmount} ${quote.depositCoin.toUpperCase()} for ~${quote.settleAmount} ${quote.settleCoin.toUpperCase()}. Is this correct?`;
+          // Calculate the rate
+          const rate = (parseFloat(quote.settleAmount) / parseFloat(quote.depositAmount)).toFixed(8);
+
+          const confirmationText = 
+            `🤔 Please confirm your swap:\n\n` +
+            `From: ${quote.depositAmount} ${quote.depositCoin.toUpperCase()}` +
+            `${network ? ` on ${network}` : ''}\n` +
+            `To: ${quote.settleAmount} ${quote.settleCoin.toUpperCase()}\n\n` +
+            `Rate: 1 ${quote.depositCoin.toUpperCase()} = ${rate} ${quote.settleCoin.toUpperCase()}`;
           
           userConversations[chatId] = {
             state: 'awaiting_confirmation',
