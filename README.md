@@ -1,111 +1,148 @@
-NeuraXchange Bot
-An AI-powered Telegram bot for seamless, conversational crypto swaps using the SideShift API. This project was built for the SideShift WaveHack Buildathon.
+# 🤖 NeuraXchange Bot
 
-🚀 About The Project
-Cross-chain cryptocurrency swaps are powerful but often intimidating for everyday users. The process can involve navigating multiple websites, connecting wallets, and understanding complex interfaces, creating a high barrier to entry.
+An **AI-powered Telegram bot** for seamless, conversational crypto swaps using the **SideShift API**.  
+Built for the **SideShift WaveHack Buildathon** 🏗️
 
-NeuraXchange solves this problem by transforming the complex process of swapping crypto into a simple, secure conversation. It leverages the power of AI and the SideShift API to allow users to perform non-custodial, direct-to-wallet swaps without ever leaving their favorite chat app.
+---
 
-✨ Key Features
-🧠 Natural Language Processing: NeuraXchange understands plain English. Users can simply state what they want to trade (e.g., "swap 0.1 ETH on arbitrum for SOL"), and the bot's AI brain extracts all the necessary details.
+## 🚀 About The Project
 
-🔗 Full SideShift API Integration: The bot is fully integrated with the SideShift API to handle the entire swap lifecycle: fetching live quotes, creating fixed-rate orders, and polling for real-time status updates.
+Cross-chain cryptocurrency swaps are powerful — but often intimidating for everyday users.  
+The process can involve **multiple websites, wallets, and complex UIs**, creating a high barrier to entry.
 
-💬 Conversational UI with Interactive Buttons: The user is guided through a seamless, multi-step conversation with clean, clickable buttons for confirmation and cancellation, making the experience fast, intuitive, and error-proof.
+**NeuraXchange** solves this by transforming that complexity into a **simple, secure conversation**.  
+It leverages **AI** and the **SideShift API** to let users perform **non-custodial, direct-to-wallet swaps** — without ever leaving Telegram.
 
-** smart Order Cancellation:** A robust /cancel command understands the SideShift API's 5-minute cancellation rule. If a user cancels too early, the bot intelligently schedules the cancellation to execute automatically, providing a superior and more helpful user experience.
+---
 
-📈 Live Price Check Command: A handy /price utility allows users to get real-time exchange rates for any pair, including those on specific networks (e.g., /price eth (arbitrum) to sol), adding value beyond just executing swaps.
+## ✨ Key Features
 
-🛠️ Built With
-Node.js
+### 🧠 Natural Language Processing
+NeuraXchange understands plain English.  
+Just type what you want to do — for example:
+> “swap 0.1 ETH on Arbitrum for SOL”
 
-(https://www.typescriptlang.org/)
+The bot’s AI extracts all the details and guides you through the swap.
 
-node-telegram-bot-api
+---
 
-node-nlp
+### 🔗 Full SideShift API Integration
+- Fetches **live quotes**
+- Creates **fixed-rate orders**
+- Polls for **real-time status updates**
 
-Axios
+---
 
-(https://docs.sideshift.ai/)
+### 💬 Conversational UI with Interactive Buttons
+Clean, guided steps with **confirmation** and **cancel** buttons make every interaction:
+- Fast ⚡  
+- Intuitive 💡  
+- Error-proof ✅
 
-🏁 Getting Started
-Follow these steps to get a local copy of the bot up and running for development and testing purposes.
+---
 
-Prerequisites
-Node.js (v18 or later)
+### 🧩 Smart Order Cancellation
+Implements the SideShift API’s **5-minute cancellation rule** intelligently.  
+If you cancel too early, the bot **schedules** a future cancellation automatically.
 
-npm
+---
 
-A Telegram Bot Token obtained from(https://t.me/BotFather).
+### 📈 Live Price Check Command
+Use `/price` to get **real-time rates** for any pair — even on specific networks.  
+Examples:
+/price btc to eth
+/price eth (arbitrum) to sol
 
-Installation & Setup
-**Clone the repository:**sh
-git clone https://github.com/your-username/NeuraXchange.git
-cd NeuraXchange
 
+---
 
-Install NPM packages:
+## 🛠️ Built With
 
-Bash
+- [Node.js](https://nodejs.org/)
+- [TypeScript](https://www.typescriptlang.org/)
+- [node-telegram-bot-api](https://github.com/yagop/node-telegram-bot-api)
+- [node-nlp](https://github.com/axa-group/nlp.js)
+- [Axios](https://axios-http.com/)
+- [SideShift API](https://docs.sideshift.ai/)
+
+---
+
+## 🏁 Getting Started
+
+Follow these steps to run **NeuraXchange** locally for development and testing.
+
+### ✅ Prerequisites
+
+- Node.js (v18 or later)
+- npm
+- A **Telegram Bot Token** from [@BotFather](https://t.me/BotFather)
+
+---
+
+### ⚙️ Installation & Setup
+
+1. **Clone the Repository**
+   ```bash
+   git clone https://github.com/your-username/NeuraXchange.git
+   cd NeuraXchange
+Install Dependencies
 
 npm install
-Set up your Environment Variables:
-Create a .env file in the root of the project. Use the .env.example file as a template and add your secret keys.
 
-مقتطف الرمز
+
+Set Up Environment Variables
+Create a .env file in the root directory (use .env.example as a guide):
 
 TELEGRAM_BOT_TOKEN=YOUR_TELEGRAM_BOT_TOKEN_HERE
 SIDESHIFT_AFFILIATE_ID=YOUR_SIDESHIFT_AFFILIATE_ID_HERE
 SIDESHIFT_SECRET=YOUR_SIDESHIFT_SECRET_HERE
-Train the AI Model:
-You must run the training script once to generate the model.nlp file. This file contains the trained brain of your bot.
 
-Bash
+
+Train the AI Model
 
 npx ts-node src/nlp.ts
-Run the Bot:
-Start the bot in development mode. nodemon will automatically restart the bot when you make changes to the code.
 
-Bash
+
+This generates the model.nlp file (the bot’s trained AI brain).
+
+Run the Bot
 
 npm run dev
-You should see the message Bot is running... in your terminal. The bot is now live and ready to receive messages on Telegram.
 
-🤖 Usage
-Once the bot is running, you can interact with it on Telegram.
 
-Start a Conversation:
-Send /start to receive a welcome message.
+You should see:
 
-Perform a Swap (Natural Language):
-Simply tell the bot what you want to do.
+Bot is running...
+
+💬 Usage
+🏁 Start a Conversation
+
+Send /start in Telegram to receive a welcome message.
+
+🔄 Perform a Swap
+
+Just type what you want:
 
 swap 0.1 ETH on arbitrum for SOL
 trade 500 USDC for BTC
 
-Check a Price:
-Use the /price command to get a live exchange rate.
-
+💹 Check a Price
 /price btc to eth
 /price eth (arbitrum) to sol
 
-Cancel a Transaction:
-At any point during a swap, you can send /cancel to safely exit the process.
+❌ Cancel a Transaction
 
-🚀 Deployment
-This bot is designed to run 24/7 on a cloud hosting platform. It has been successfully deployed on Render and Railway as a Background Worker (or equivalent service type that does not require an open port).
+Send /cancel anytime to safely exit a swap.
 
-Key deployment steps include:
+☁️ Deployment
 
-Setting the Build Command to npm install && npm run build.
+NeuraXchange is designed to run 24/7 on cloud platforms like Render or Railway as a Background Worker (no open port needed).
 
-Setting the Start Command to npm run start.
+🔧 Deployment Steps
 
-Adding the environment variables to the platform's secrets management dashboard.
+Build Command:
 
-Ensuring the model.nlp file is committed to the repository so it's available during the build process.
+npm install && npm run build
 
 ## Agent tools demo
 
@@ -133,8 +170,16 @@ npm run build; node dist/scripts/demo-agent.js "I need 0.3 SOL"
 Notes:
 - The parser is intentionally small and heuristic-based; it maps phrases like "I need 0.3 SOL" to a call to `get_quote_by_settle_amount` with `settleAmount=0.3`.
 - Use `src/agent.ts`'s `tools` array with a LangChain agent if you'd like automated tool-calling from a full LLM.
-- If you want me to wire a live LangChain agent (OpenAI) into a running demo, I can add that as an optional example (requires an OpenAI API key).
+- If you want an example wiring a live LangChain agent (OpenAI) into a running demo, I can add that as an optional example (requires an OpenAI API key).
 
-📄 License
+Start Command:
+
+npm run start
+
+Add environment variables in your platform’s dashboard.
+
+Ensure model.nlp is committed to the repository for the build process.
+
+📜 License
+
 Distributed under the MIT License. See LICENSE for more information.
-
