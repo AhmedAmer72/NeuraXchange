@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { getQuote, createVariableShift } from './sideshift';
+import { getQuote } from './sideshift';
 
 const COINGECKO_API_URL = 'https://api.coingecko.com/api/v3';
 

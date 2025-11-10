@@ -915,7 +915,7 @@ Now select the coin you want to swap TO:`, {
       }
 
       // --- Error prediction for incompatible chains ---
-      const predErr = predictInputError(fromCurrency, toCurrency, settleAddress);
+      const predErr = await predictInputError(fromCurrency, toCurrency, settleAddress);
       if (predErr) {
         bot.sendMessage(chatId, `⚠️ Warning: ${predErr}`);
       }
