@@ -294,7 +294,7 @@ Here are the available commands:
 /price - Check the price of a cryptocurrency pair.
 /alert - Set a price alert.
 /coins - See the list of available coins.
-/help - Show this message again.
+
 
 You can also talk to me in natural language. For example: "swap 0.1 btc to eth" or "what is the price of solana".
 `;
