@@ -286,20 +286,21 @@ function setupBotHandlers() {
 
   // --- COMMAND HANDLERS ---
 
-  bot.onText(/\/start/, async (msg: Message) => {
+  bot.onText(/\/start/, (msg: Message) => {
     const chatId = msg.chat.id;
-    const welcomeMessage = `👋 Welcome to NeuraXchange!\n\nLet's start your swap. Please choose the coin you want to swap FROM:`;
-    const coins = await getAvailableCoins();
-    const popular = ['BTC', 'ETH', 'USDT', 'USDC', 'SOL', 'DAI'];
-    const keyboard = [
-      popular.slice(0, 3).map(c => ({ text: c, callback_data: `from_${c}` })),
-      popular.slice(3, 6).map(c => ({ text: c, callback_data: `from_${c}` })),
-      [{ text: '🔍 More coins...', callback_data: 'from_more' }]
-    ];
-    bot.sendMessage(chatId, welcomeMessage, {
-      reply_markup: { inline_keyboard: keyboard }
-    });
-    userConversations[chatId] = { state: 'selecting_from_coin', details: {} };
+    const welcomeMessage = `
+👋 Welcome to NeuraXchange!
+
+I am a bot that can help you with the following features:
+
+-   **Crypto Swaps:** You can swap cryptocurrencies by sending a message like "swap 0.1 btc to eth".
+-   **Price Checks:** You can check the price of a cryptocurrency by sending a message like "price btc to usdt".
+-   **Price Alerts:** You can set a price alert by sending the /alert command.
+-   **AI Assistant:** You can ask me any question about cryptocurrencies and I will try to answer it.
+
+How can I help you today?
+  `;
+    bot.sendMessage(chatId, welcomeMessage, { parse_mode: 'Markdown' });
   });
 
   // Coins command - Show available coins and allow inspecting networks via buttons
