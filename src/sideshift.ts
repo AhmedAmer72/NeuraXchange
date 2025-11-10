@@ -262,6 +262,38 @@ export async function createShift(params: ShiftParams) {
   }
 }
 
+export async function createVariableShift(params: { depositCoin: string, settleCoin: string }) {
+  console.log('Creating variable shift for fee estimation with params:', params);
+  
+  try {
+    const requestData: any = {
+      depositCoin: params.depositCoin,
+      settleCoin: params.settleCoin,
+      settleAddress: '0x0000000000000000000000000000000000000000' // Placeholder for fee estimation
+    };
+
+    if (shouldIncludeAffiliateId()) {
+      requestData.affiliateId = SIDESHIFT_AFFILIATE_ID;
+    }
+
+    const response = await sideshiftApi.post('/shifts/variable', requestData);
+    
+    console.log('✅ Variable shift created for fee estimation:', {
+      id: response.data.id,
+      status: response.data.status
+    });
+    
+    return response.data;
+  } catch (error: any) {
+    console.error('❌ Error creating variable shift for fee estimation:', {
+      message: error.message,
+      status: error.response?.status,
+      data: error.response?.data
+    });
+    throw error;
+  }
+}
+
 export async function pollShiftStatus(shiftId: string) {
   console.log(`Polling status for shift: ${shiftId}`);
   

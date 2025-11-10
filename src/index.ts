@@ -1,11 +1,20 @@
 import * as dotenv from 'dotenv';
 import TelegramBot, { Message } from 'node-telegram-bot-api';
 import { NlpManager } from 'node-nlp';
+
 import * as fs from 'fs';
 import WAValidator from 'multicoin-address-validator';
 import { getQuote, createShift, pollShiftStatus, cancelShift, getAvailableCoins } from './sideshift';
 import { trainAndSaveNlpModel } from './nlp';
 import express from 'express';
+// Advanced features imports
+import { getMarketTrend } from './marketData';
+import { getFeeBreakdown } from './fees';
+import { addAlert, checkAlerts, getAlertsForPair } from './alerts';
+import { addSwap, getUserHistory } from './history';
+import { detectNetwork } from './addressDetect';
+import { predictInputError } from './errorPredict';
+import { handleNaturalLanguage } from './aiAssistant';
 
 dotenv.config();
 
@@ -227,6 +236,10 @@ async function startApplication() {
     // 6. Set up all bot handlers
     setupBotHandlers();
     
+    // 7. Start periodic alert checks
+    setInterval(() => checkAlerts(bot), 30000); // Check every 30 seconds
+    console.log('⏰ Price alert checker started');
+    
   } catch (error: any) {
     console.error('❌ Failed to start application:', error);
     
@@ -373,6 +386,21 @@ function setupBotHandlers() {
     bot.sendMessage(chatId, 'Select a base coin to check price (1 unit):', { reply_markup: { inline_keyboard: rows } });
   });
 
+  bot.onText(/\/alert/, async (msg: Message) => {
+    const chatId = msg.chat.id;
+    const coins = await getAvailableCoins();
+    const popular = ['BTC', 'ETH', 'USDT', 'USDC', 'SOL', 'DAI'];
+    const keyboard = [
+      popular.slice(0, 3).map(c => ({ text: c, callback_data: `alert_from_${c}` })),
+      popular.slice(3, 6).map(c => ({ text: c, callback_data: `alert_from_${c}` })),
+      [{ text: '🔍 More coins...', callback_data: 'alert_from_more' }]
+    ];
+    bot.sendMessage(chatId, 'Select the base coin for the alert (FROM):', {
+      reply_markup: { inline_keyboard: keyboard }
+    });
+    userConversations[chatId] = { state: 'setting_alert_from', details: {} };
+  });
+
   bot.onText(/\/price (.+) to (.+)/, async (msg, match) => {
     const chatId = msg.chat.id;
     if (!match) return;
@@ -403,6 +431,78 @@ function setupBotHandlers() {
     const originalMessageId = callbackQuery.message!.message_id;
     const data = callbackQuery.data;
     await bot.answerCallbackQuery(callbackQuery.id);
+
+    // Alert creation flow
+    if (data && data.startsWith('alert_from_')) {
+      const fromCoin = data.replace('alert_from_', '');
+      if (fromCoin === 'more') {
+        // Show all coins as buttons
+        const coins = await getAvailableCoins();
+        const all = coins.map((c: any) => c.coin.toUpperCase()).sort();
+        const rows = [];
+        for (let i = 0; i < all.length; i += 3) {
+          rows.push(all.slice(i, i + 3).map((c: string) => ({ text: c, callback_data: `alert_from_${c}` })));
+        }
+        bot.editMessageText('Select the base coin for the alert (FROM):', {
+          chat_id: chatId,
+          message_id: originalMessageId,
+          reply_markup: { inline_keyboard: rows }
+        });
+        return;
+      }
+      userConversations[chatId] = { state: 'setting_alert_to', details: { fromCoin } };
+      const coins = await getAvailableCoins();
+      const all = coins.map((c: any) => c.coin.toUpperCase()).filter((c: string) => c !== fromCoin).sort();
+      const rows = [];
+      for (let i = 0; i < all.length; i += 3) {
+        rows.push(all.slice(i, i + 3).map((c: string) => ({ text: c, callback_data: `alert_to_${c}` })));
+      }
+      bot.editMessageText(`Alert for *${fromCoin}* to which coin?`, {
+        chat_id: chatId,
+        message_id: originalMessageId,
+        parse_mode: 'Markdown',
+        reply_markup: { inline_keyboard: rows }
+      });
+      return;
+    }
+
+    if (data && data.startsWith('alert_to_')) {
+      const toCoin = data.replace('alert_to_', '');
+      if (!userState || !userState.details.fromCoin) {
+        bot.sendMessage(chatId, '⚠️ Please start a new alert with /alert.');
+        return;
+      }
+      userConversations[chatId].details.toCoin = toCoin;
+      userConversations[chatId].state = 'setting_alert_direction';
+      bot.editMessageText(`Alert for *${userState.details.fromCoin}* to *${toCoin}*.
+Notify when the rate is:`, {
+        chat_id: chatId,
+        message_id: originalMessageId,
+        parse_mode: 'Markdown',
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '⬆️ Above', callback_data: 'alert_dir_above' }, { text: '⬇️ Below', callback_data: 'alert_dir_below' }]
+          ]
+        }
+      });
+      return;
+    }
+
+    if (data && data.startsWith('alert_dir_')) {
+      const direction = data.replace('alert_dir_', '');
+      if (!userState || !userState.details.toCoin) {
+        bot.sendMessage(chatId, '⚠️ Please start a new alert with /alert.');
+        return;
+      }
+      userConversations[chatId].details.direction = direction;
+      userConversations[chatId].state = 'setting_alert_rate';
+      bot.editMessageText(`Notify when *${userState.details.fromCoin}/${userState.details.toCoin}* is ${direction} what rate?`, {
+        chat_id: chatId,
+        message_id: originalMessageId,
+        parse_mode: 'Markdown'
+      });
+      return;
+    }
 
     // Step 1: User picks FROM coin
     if (data && data.startsWith('from_')) {
@@ -661,6 +761,30 @@ Now select the coin you want to swap TO:`, {
     const chatId = msg.chat.id;
     const userState = userConversations[chatId];
 
+    // State: Setting Alert Rate
+    if (userState && userState.state === 'setting_alert_rate') {
+      const rate = parseFloat(msg.text.trim());
+
+      if (isNaN(rate) || rate <= 0) {
+        bot.sendMessage(chatId, '⚠️ Please enter a valid positive number for the rate.');
+        return;
+      }
+
+      const { fromCoin, toCoin, direction } = userState.details;
+
+      addAlert({
+        chatId,
+        from: fromCoin.toLowerCase(),
+        to: toCoin.toLowerCase(),
+        targetRate: rate,
+        direction: direction
+      });
+
+      bot.sendMessage(chatId, `✅ Alert created! I will notify you when *${fromCoin}/${toCoin}* goes ${direction} *${rate}*.`, { parse_mode: 'Markdown' });
+      delete userConversations[chatId];
+      return;
+    }
+
     // State 1.5: Entering amount (button-driven flow)
     if (userState && userState.state === 'entering_amount') {
       const amount = msg.text.trim();
@@ -678,6 +802,22 @@ Now select the coin you want to swap TO:`, {
       }
 
       const { fromCoin, fromNetwork, toCoin, toNetwork } = userState.details;
+
+      // --- Advanced: Show market trend and fee breakdown ---
+      let trendMsg = '';
+      let feeMsg = '';
+      try {
+        const trend = await getMarketTrend(fromCoin, toCoin);
+        if (trend) {
+          trendMsg = `\n📊 24h trend: ${trend.direction === 'up' ? '⬆️' : trend.direction === 'down' ? '⬇️' : '⏸'} ${trend.trendPct > 0 ? '+' : ''}${trend.trendPct}%`;
+        }
+        const fees = await getFeeBreakdown(fromCoin, toCoin, amount);
+        if (fees) {
+          feeMsg = `\n💸 Fees: Network ${fees.networkFee.toFixed(8)} + Service ${fees.serviceFee.toFixed(8)} = Total ${fees.totalFee.toFixed(8)}`;
+        }
+      } catch (e) {
+        // Ignore errors in trend/fee for now
+      }
 
       try {
         bot.sendMessage(chatId, '⏳ Fetching a live quote from SideShift...');
@@ -697,8 +837,9 @@ Now select the coin you want to swap TO:`, {
           `From: ${quote.depositAmount} ${quote.depositCoin.toUpperCase()}` +
           `${fromNetwork ? ` on ${fromNetwork}` : ''}\n` +
           `To: ${quote.settleAmount} ${quote.settleCoin.toUpperCase()}` +
-          `${toNetwork ? ` on ${toNetwork}` : ''}\n\n` +
-          `Rate: 1 ${quote.depositCoin.toUpperCase()} = ${rate} ${quote.settleCoin.toUpperCase()}`;
+          `${toNetwork ? ` on ${toNetwork}` : ''}\n` +
+          `Rate: 1 ${quote.depositCoin.toUpperCase()} = ${rate} ${quote.settleCoin.toUpperCase()}` +
+          trendMsg + feeMsg;
 
         userConversations[chatId] = {
           state: 'awaiting_confirmation',
@@ -726,6 +867,9 @@ Now select the coin you want to swap TO:`, {
           }
         });
 
+        // --- Analytics/history: record swap intent ---
+        addSwap({ chatId, from: fromCoin, to: toCoin, amount, date: new Date().toISOString() });
+
       } catch (error: any) {
         console.error('Quote error (entering_amount):', error?.message || error);
         bot.sendMessage(chatId, '⚠️ Sorry, I couldn\'t get a quote for that pair or amount.', {
@@ -745,6 +889,18 @@ Now select the coin you want to swap TO:`, {
     if (userState && userState.state === 'awaiting_address') {
       const settleAddress = msg.text!;
       const { toCurrency, fromCurrency } = userState.details;
+
+      // --- Auto-detect network from address ---
+      const detectedNet = detectNetwork(settleAddress);
+      if (detectedNet) {
+        bot.sendMessage(chatId, `ℹ️ Detected network: ${detectedNet}`);
+      }
+
+      // --- Error prediction for incompatible chains ---
+      const predErr = predictInputError(fromCurrency, toCurrency, settleAddress);
+      if (predErr) {
+        bot.sendMessage(chatId, `⚠️ Warning: ${predErr}`);
+      }
 
       const isValidAddress = WAValidator.validate(settleAddress, toCurrency);
 
@@ -824,6 +980,14 @@ I will notify you of any updates. You can type /cancel at any time before sendin
     }
 
     // State 0: Initial Request
+    // --- AI assistant: handle advanced natural language ---
+    if (/help|cheapest|best|track|history|portfolio|alert|notify|export|csv|progress|trend|fee|network|address|error|detect|ai|assistant/i.test(msg.text)) {
+      // If user asks for advanced features, route to AI assistant
+      const aiResp = await handleNaturalLanguage(msg.text, chatId);
+      bot.sendMessage(chatId, aiResp);
+      return;
+    }
+
     const nlpResponse = await nlpManager.process('en', msg.text);
     if (nlpResponse.intent === 'swap.crypto') {
       const amountEntity = nlpResponse.entities.find((ent: any) => ent.entity === 'number');
@@ -835,6 +999,22 @@ I will notify you of any updates. You can type /cancel at any time before sendin
         const fromCurrency = currencyEntities[0].option;
         const toCurrency = currencyEntities[1].option;
         const network = networkEntity ? networkEntity.option : undefined;
+
+        // --- Advanced: Show market trend and fee breakdown ---
+        let trendMsg = '';
+        let feeMsg = '';
+        try {
+          const trend = await getMarketTrend(fromCurrency, toCurrency);
+          if (trend) {
+            trendMsg = `\n📊 24h trend: ${trend.direction === 'up' ? '⬆️' : trend.direction === 'down' ? '⬇️' : '⏸'} ${trend.trendPct > 0 ? '+' : ''}${trend.trendPct}%`;
+          }
+          const fees = await getFeeBreakdown(fromCurrency, toCurrency, amount);
+          if (fees) {
+            feeMsg = `\n💸 Fees: Network ${fees.networkFee.toFixed(8)} + Service ${fees.serviceFee.toFixed(8)} = Total ${fees.totalFee.toFixed(8)}`;
+          }
+        } catch (e) {
+          // Ignore errors in trend/fee for now
+        }
 
         try {
           bot.sendMessage(chatId, '⏳ Fetching a live quote from SideShift...');
@@ -854,7 +1034,8 @@ I will notify you of any updates. You can type /cancel at any time before sendin
             `From: ${quote.depositAmount} ${quote.depositCoin.toUpperCase()}` +
             `${network ? ` on ${network}` : ''}\n` +
             `To: ${quote.settleAmount} ${quote.settleCoin.toUpperCase()}\n\n` +
-            `Rate: 1 ${quote.depositCoin.toUpperCase()} = ${rate} ${quote.settleCoin.toUpperCase()}`;
+            `Rate: 1 ${quote.depositCoin.toUpperCase()} = ${rate} ${quote.settleCoin.toUpperCase()}` +
+            trendMsg + feeMsg;
           
           userConversations[chatId] = {
             state: 'awaiting_confirmation',
@@ -875,6 +1056,9 @@ I will notify you of any updates. You can type /cancel at any time before sendin
               ]
             }
           });
+
+          // --- Analytics/history: record swap intent ---
+          addSwap({ chatId, from: fromCurrency, to: toCurrency, amount, date: new Date().toISOString() });
 
         } catch (error) {
           bot.sendMessage(chatId, `⚠️ Sorry, I couldn't get a quote for that pair. Please check the coin tickers and try again.`);

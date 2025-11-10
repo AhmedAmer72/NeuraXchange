@@ -18,7 +18,8 @@
     "langchain": "^1.0.3",
     "multicoin-address-validator": "^0.5.26",
     "node-nlp": "^5.0.0-alpha.5",
-    "node-telegram-bot-api": "^0.66.0"
+    "node-telegram-bot-api": "^0.66.0",
+    "@prisma/client": "^5.12.1"
   },
   "description": "",
   "devDependencies": {
@@ -27,6 +28,7 @@
     "@types/node": "^24.5.2",
     "@types/node-telegram-bot-api": "^0.64.11",
     "nodemon": "^3.1.10",
+    "prisma": "^5.12.1",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.2"
   }
