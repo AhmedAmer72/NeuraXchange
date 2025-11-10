@@ -273,56 +273,37 @@ function setupBotHandlers() {
 
   // --- COMMAND HANDLERS ---
 
-  bot.onText(/\/start/, (msg: Message) => {
+  bot.onText(/\/start/, async (msg: Message) => {
     const chatId = msg.chat.id;
-    const welcomeMessage = `👋 Welcome to NeuraXchange! What would you like to do?\n\n` +
-      `💬 You can:\n` +
-      `• Just tell me what you want to swap (e.g. "swap 0.1 ETH for SOL")\n` +
-      `• Check prices with /price (e.g. "/price eth to btc")\n` +
-      `• See all available coins with /coins`;
-    bot.sendMessage(chatId, welcomeMessage, { parse_mode: 'Markdown' });
+    const welcomeMessage = `👋 Welcome to NeuraXchange!\n\nLet's start your swap. Please choose the coin you want to swap FROM:`;
+    const coins = await getAvailableCoins();
+    const popular = ['BTC', 'ETH', 'USDT', 'USDC', 'SOL', 'DAI'];
+    const keyboard = [
+      popular.slice(0, 3).map(c => ({ text: c, callback_data: `from_${c}` })),
+      popular.slice(3, 6).map(c => ({ text: c, callback_data: `from_${c}` })),
+      [{ text: '🔍 More coins...', callback_data: 'from_more' }]
+    ];
+    bot.sendMessage(chatId, welcomeMessage, {
+      reply_markup: { inline_keyboard: keyboard }
+    });
+    userConversations[chatId] = { state: 'selecting_from_coin', details: {} };
   });
 
-  // Coins command - Show available coins and networks
+  // Coins command - Show available coins and allow inspecting networks via buttons
   bot.onText(/\/coins/, async (msg: Message) => {
     const chatId = msg.chat.id;
     try {
       bot.sendMessage(chatId, "⏳ Fetching available coins...");
       const coins = await getAvailableCoins();
-      
-      // Group coins by network for better organization
-      const networkMap = new Map<string, Set<string>>();
-      let totalCoins = 0;
-      
-      coins.forEach((coin: any) => {
-        totalCoins++;
-        const networks = Array.isArray(coin.networks) ? coin.networks : [];
-        networks.forEach((network: string | { network: string }) => {
-          const networkName = typeof network === 'string' ? network : network.network;
-          if (!networkMap.has(networkName)) {
-            networkMap.set(networkName, new Set());
-          }
-          networkMap.get(networkName)?.add(coin.coin.toUpperCase());
-        });
-      });
-
-      // Build the response message
-      let message = `🏦 *Available Coins and Networks*\n`;
-      message += `Total coins: ${totalCoins}\n`;
-      message += `Total networks: ${networkMap.size}\n\n`;
-      
-      // Add network summaries
-      const networkSummaries = Array.from(networkMap.entries())
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([network, coins]) => 
-          `*${network}*: ${coins.size} coins\n_Examples: ${Array.from(coins).slice(0, 3).join(', ')}${coins.size > 3 ? '...' : ''}_`
-        );
-      
-      message += networkSummaries.join('\n\n');
-      
-      message += '\n\nUse `/price <coin1> to <coin2>` to check exchange rates.';
-      
-      bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
+      const all = coins.map((c: any) => c.coin.toUpperCase()).sort();
+      const rows: any[] = [];
+      const sample = all.slice(0, 24);
+      for (let i = 0; i < sample.length; i += 3) {
+        rows.push(sample.slice(i, i + 3).map((c: string) => ({ text: c, callback_data: `coin_info_${c}` })));
+      }
+      // Add a 'more' button that instructs using the API or reload
+      rows.push([{ text: '🔁 Show more (use /coins again)', callback_data: 'noop' }]);
+      bot.sendMessage(chatId, `🏦 Available Coins (sample):`, { reply_markup: { inline_keyboard: rows } });
     } catch (error) {
       bot.sendMessage(chatId, "⚠️ Sorry, I couldn't fetch the coin list right now. Please try again later.");
     }
@@ -378,13 +359,18 @@ function setupBotHandlers() {
     delete userConversations[chatId]; // Clear the state for this user in all cases
   });
 
-  bot.onText(/\/price$/, (msg: Message) => {
+  bot.onText(/\/price$/, async (msg: Message) => {
     const chatId = msg.chat.id;
-    const exampleMessage = `Please provide the currencies you want to check.
-*Examples:*
-\`/price eth to btc\`
-\`/price eth (arbitrum) to sol\``;
-    bot.sendMessage(chatId, exampleMessage, { parse_mode: 'Markdown' });
+    // Start a button-driven price check flow
+    const coins = await getAvailableCoins();
+    const all = coins.map((c: any) => c.coin.toUpperCase()).sort();
+    const sample = all.slice(0, 18);
+    const rows: any[] = [];
+    for (let i = 0; i < sample.length; i += 3) {
+      rows.push(sample.slice(i, i + 3).map((c: string) => ({ text: c, callback_data: `price_from_${c}` })));
+    }
+    rows.push([{ text: '🔍 Show more in /coins', callback_data: 'noop' }]);
+    bot.sendMessage(chatId, 'Select a base coin to check price (1 unit):', { reply_markup: { inline_keyboard: rows } });
   });
 
   bot.onText(/\/price (.+) to (.+)/, async (msg, match) => {
@@ -415,18 +401,253 @@ function setupBotHandlers() {
     const chatId = callbackQuery.message!.chat.id;
     const userState = userConversations[chatId];
     const originalMessageId = callbackQuery.message!.message_id;
+    const data = callbackQuery.data;
+    await bot.answerCallbackQuery(callbackQuery.id);
 
-    bot.answerCallbackQuery(callbackQuery.id);
+    // Step 1: User picks FROM coin
+    if (data && data.startsWith('from_')) {
+      let fromCoin = data.replace('from_', '');
+      if (fromCoin === 'more') {
+        // Show all coins as buttons (paginated if needed)
+        const coins = await getAvailableCoins();
+        const all = coins.map((c: any) => c.coin.toUpperCase()).sort();
+        const rows = [];
+        for (let i = 0; i < all.length; i += 3) {
+          rows.push(all.slice(i, i + 3).map((c: string) => ({ text: c, callback_data: `from_${c}` })));
+        }
+        bot.editMessageText('Select the coin you want to swap FROM:', {
+          chat_id: chatId,
+          message_id: originalMessageId,
+          reply_markup: { inline_keyboard: rows }
+        });
+        return;
+      }
+      // Show network selection for FROM coin
+      const coins = await getAvailableCoins();
+      const coinObj = coins.find((c: any) => c.coin.toUpperCase() === fromCoin);
+      let networks: string[] = [];
+      if (coinObj && Array.isArray(coinObj.networks)) {
+        networks = coinObj.networks.map((n: any) => typeof n === 'string' ? n : n.network).filter(Boolean);
+      }
+      if (networks.length > 1) {
+        const rows = [];
+        for (let i = 0; i < networks.length; i += 2) {
+          rows.push(networks.slice(i, i + 2).map((n: string) => ({ text: n, callback_data: `fromnet_${fromCoin}_${n}` })));
+        }
+        bot.editMessageText(`Select the network for *${fromCoin}* you want to swap FROM:`, {
+          chat_id: chatId,
+          message_id: originalMessageId,
+          parse_mode: 'Markdown',
+          reply_markup: { inline_keyboard: rows }
+        });
+        return;
+      }
+      // If only one or no network, proceed to TO coin selection
+      userConversations[chatId] = { state: 'selecting_to_coin', details: { fromCoin, fromNetwork: networks[0] || undefined } };
+      const all = coins.map((c: any) => c.coin.toUpperCase()).filter((c: string) => c !== fromCoin).sort();
+      const rows = [];
+      for (let i = 0; i < all.length; i += 3) {
+        rows.push(all.slice(i, i + 3).map((c: string) => ({ text: c, callback_data: `to_${c}` })));
+      }
+      bot.editMessageText(`You chose *${fromCoin}*${networks[0] ? ` on *${networks[0]}*` : ''}.
+Now select the coin you want to swap TO:`, {
+        chat_id: chatId,
+        message_id: originalMessageId,
+        parse_mode: 'Markdown',
+        reply_markup: { inline_keyboard: rows }
+      });
+      return;
+    }
 
-    if (callbackQuery.data === 'confirm_swap') {
+    // Step 1b: User picks FROM network
+    if (data && data.startsWith('fromnet_')) {
+      const [ , fromCoin, fromNetwork ] = data.split('_');
+      userConversations[chatId] = { state: 'selecting_to_coin', details: { fromCoin, fromNetwork } };
+      const coins = await getAvailableCoins();
+      const all = coins.map((c: any) => c.coin.toUpperCase()).filter((c: string) => c !== fromCoin).sort();
+      const rows = [];
+      for (let i = 0; i < all.length; i += 3) {
+        rows.push(all.slice(i, i + 3).map((c: string) => ({ text: c, callback_data: `to_${c}` })));
+      }
+      bot.editMessageText(`You chose *${fromCoin}* on *${fromNetwork}*.
+Now select the coin you want to swap TO:`, {
+        chat_id: chatId,
+        message_id: originalMessageId,
+        parse_mode: 'Markdown',
+        reply_markup: { inline_keyboard: rows }
+      });
+      return;
+    }
+
+    // Step 2: User picks TO coin
+    if (data && data.startsWith('to_')) {
+      const toCoin = data.replace('to_', '');
+      if (!userState || !userState.details.fromCoin) {
+        bot.sendMessage(chatId, '⚠️ Please start a new swap with /start.');
+        return;
+      }
+      // Show network selection for TO coin
+      const coins = await getAvailableCoins();
+      const coinObj = coins.find((c: any) => c.coin.toUpperCase() === toCoin);
+      let networks: string[] = [];
+      if (coinObj && Array.isArray(coinObj.networks)) {
+        networks = coinObj.networks.map((n: any) => typeof n === 'string' ? n : n.network).filter(Boolean);
+      }
+      if (networks.length > 1) {
+        const rows = [];
+        for (let i = 0; i < networks.length; i += 2) {
+          rows.push(networks.slice(i, i + 2).map((n: string) => ({ text: n, callback_data: `tonet_${toCoin}_${n}` })));
+        }
+        bot.editMessageText(`Select the network for *${toCoin}* you want to swap TO:`, {
+          chat_id: chatId,
+          message_id: originalMessageId,
+          parse_mode: 'Markdown',
+          reply_markup: { inline_keyboard: rows }
+        });
+        return;
+      }
+      // If only one or no network, proceed to amount entry
+      userConversations[chatId] = {
+        state: 'entering_amount',
+        details: {
+          fromCoin: userState.details.fromCoin,
+          fromNetwork: userState.details.fromNetwork,
+          toCoin,
+          toNetwork: networks[0] || undefined
+        }
+      };
+      bot.editMessageText(`You want to swap *${userState.details.fromCoin}*${userState.details.fromNetwork ? ` on *${userState.details.fromNetwork}*` : ''} to *${toCoin}*${networks[0] ? ` on *${networks[0]}*` : ''}.
+\nPlease enter the amount of *${userState.details.fromCoin}* you want to swap:`, {
+        chat_id: chatId,
+        message_id: originalMessageId,
+        parse_mode: 'Markdown'
+      });
+      return;
+    }
+
+    // Step 2b: User picks TO network
+    if (data && data.startsWith('tonet_')) {
+      const [ , toCoin, toNetwork ] = data.split('_');
+      if (!userState || !userState.details.fromCoin) {
+        bot.sendMessage(chatId, '⚠️ Please start a new swap with /start.');
+        return;
+      }
+      userConversations[chatId] = {
+        state: 'entering_amount',
+        details: {
+          fromCoin: userState.details.fromCoin,
+          fromNetwork: userState.details.fromNetwork,
+          toCoin,
+          toNetwork
+        }
+      };
+      bot.editMessageText(`You want to swap *${userState.details.fromCoin}*${userState.details.fromNetwork ? ` on *${userState.details.fromNetwork}*` : ''} to *${toCoin}* on *${toNetwork}*.
+\nPlease enter the amount of *${userState.details.fromCoin}* you want to swap:`, {
+        chat_id: chatId,
+        message_id: originalMessageId,
+        parse_mode: 'Markdown'
+      });
+      return;
+    }
+
+    // Additional quick-action handlers: back, retry, price/coins, swap again
+    if (data === 'back_amount') {
+      // Return to amount entry keeping details
+      if (userState && (userState.state === 'awaiting_confirmation' || userState.state === 'entering_amount' || userState.state === 'selecting_to_coin')) {
+        userConversations[chatId].state = 'entering_amount';
+        bot.editMessageText('Please enter the amount you want to swap:', { chat_id: chatId, message_id: originalMessageId });
+      }
+      return;
+    }
+
+    if (data === 'back_to_from') {
+      // Start from coin selection again
+      const popular = ['BTC', 'ETH', 'USDT', 'USDC', 'SOL', 'DAI'];
+      const keyboard = [
+        popular.slice(0, 3).map(c => ({ text: c, callback_data: `from_${c}` })),
+        popular.slice(3, 6).map(c => ({ text: c, callback_data: `from_${c}` })),
+        [{ text: '🔍 More coins...', callback_data: 'from_more' }]
+      ];
+      userConversations[chatId] = { state: 'selecting_from_coin', details: {} };
+      bot.editMessageText('Select the coin you want to swap FROM:', { chat_id: chatId, message_id: originalMessageId, reply_markup: { inline_keyboard: keyboard } });
+      return;
+    }
+
+    if (data === 'try_quote') {
+      // Ask user to re-enter amount
+      if (userState && userState.state === 'entering_amount') {
+        bot.editMessageText('Please enter the amount you want to swap (try a different amount):', { chat_id: chatId, message_id: originalMessageId });
+        userConversations[chatId].state = 'entering_amount';
+      } else {
+        bot.sendMessage(chatId, 'Please enter the amount you want to swap.');
+        userConversations[chatId] = { state: 'entering_amount', details: userState?.details || {} };
+      }
+      return;
+    }
+
+    if (data === 'swap_again') {
+      // Shortcut to start another swap
+      const popular = ['BTC', 'ETH', 'USDT', 'USDC', 'SOL', 'DAI'];
+      const keyboard = [
+        popular.slice(0, 3).map(c => ({ text: c, callback_data: `from_${c}` })),
+        popular.slice(3, 6).map(c => ({ text: c, callback_data: `from_${c}` })),
+        [{ text: '🔍 More coins...', callback_data: 'from_more' }]
+      ];
+      userConversations[chatId] = { state: 'selecting_from_coin', details: {} };
+      bot.sendMessage(chatId, 'Ready for a new swap. Select the coin you want to swap FROM:', { reply_markup: { inline_keyboard: keyboard } });
+      return;
+    }
+
+    // Price command button flow handlers
+    if (data && data.startsWith('price_from_')) {
+      const from = data.replace('price_from_', '');
+      // Show list of possible 'to' coins
+      const coins = await getAvailableCoins();
+      const all = coins.map((c: any) => c.coin.toUpperCase()).filter((c: string) => c !== from).sort();
+      const rows = [];
+      for (let i = 0; i < all.length; i += 3) {
+        rows.push(all.slice(i, i + 3).map((c: string) => ({ text: c, callback_data: `price_to_${from}_${c}` })));
+      }
+      bot.editMessageText(`Price: from *${from}* to which coin?`, { chat_id: chatId, message_id: originalMessageId, parse_mode: 'Markdown', reply_markup: { inline_keyboard: rows } });
+      return;
+    }
+
+    if (data && data.startsWith('price_to_')) {
+      const [, from, to] = data.split('_');
+      try {
+        bot.sendMessage(chatId, `⏳ Checking the price for 1 ${from} to ${to}...`);
+        const quote = await getQuote({ depositCoin: from.toLowerCase(), settleCoin: to.toLowerCase(), depositAmount: '1' });
+        bot.sendMessage(chatId, `📈 1 ${quote.depositCoin.toUpperCase()} ≈ ${quote.settleAmount} ${quote.settleCoin.toUpperCase()}`);
+      } catch (err) {
+        bot.sendMessage(chatId, `⚠️ Sorry, I couldn't get the price for that pair. Try a different pair or use /price <coin> to <coin>.`);
+      }
+      return;
+    }
+
+    // /coins interactive: show networks for a selected coin
+    if (data && data.startsWith('coin_info_')) {
+      const coinSym = data.replace('coin_info_', '').toLowerCase();
+      const coins = await getAvailableCoins();
+      const coinObj = coins.find((c: any) => c.coin.toLowerCase() === coinSym);
+      if (!coinObj) {
+        bot.sendMessage(chatId, 'Coin not found.');
+        return;
+      }
+      const networks = Array.isArray(coinObj.networks) ? coinObj.networks.map((n: any) => typeof n === 'string' ? n : n.network) : [];
+      let text = `*${coinObj.coin.toUpperCase()}* - ${coinObj.name || ''}\n\nNetworks:\n` + (networks.length ? networks.join('\n') : 'None');
+      bot.editMessageText(text, { chat_id: chatId, message_id: originalMessageId, parse_mode: 'Markdown' });
+      return;
+    }
+
+    // Existing confirm/cancel logic
+    if (data === 'confirm_swap') {
       if (userState && userState.state === 'awaiting_confirmation') {
         bot.editMessageText(`✅ You confirmed the swap.`, { chat_id: chatId, message_id: originalMessageId });
         bot.sendMessage(chatId, `➡️ Great! Please provide the destination wallet address for your ${userState.details.toCurrency}.`);
         userConversations[chatId].state = 'awaiting_address';
       }
     }
-
-    if (callbackQuery.data === 'cancel_swap') {
+    if (data === 'cancel_swap') {
       bot.editMessageText(`❌ Swap cancelled.`, { chat_id: chatId, message_id: originalMessageId });
       delete userConversations[chatId];
     }
@@ -439,6 +660,86 @@ function setupBotHandlers() {
 
     const chatId = msg.chat.id;
     const userState = userConversations[chatId];
+
+    // State 1.5: Entering amount (button-driven flow)
+    if (userState && userState.state === 'entering_amount') {
+      const amount = msg.text.trim();
+
+      // Allow a simple 'max' button response (informative) - API doesn't provide max reliably
+      if (/^max$/i.test(amount)) {
+        bot.sendMessage(chatId, "⚠️ 'Max' is not supported by SideShift in this flow. Please enter the numeric amount you want to swap (e.g., 0.1).");
+        return;
+      }
+
+      // Validate amount is a positive number
+      if (!/^\d*\.?\d+$/.test(amount) || parseFloat(amount) <= 0) {
+        bot.sendMessage(chatId, '⚠️ Please enter a valid positive number (e.g., 0.1).');
+        return;
+      }
+
+      const { fromCoin, fromNetwork, toCoin, toNetwork } = userState.details;
+
+      try {
+        bot.sendMessage(chatId, '⏳ Fetching a live quote from SideShift...');
+
+        const quote = await getQuote({
+          depositCoin: fromCoin.toLowerCase(),
+          depositNetwork: fromNetwork ? fromNetwork.toLowerCase() : undefined,
+          settleCoin: toCoin.toLowerCase(),
+          settleNetwork: toNetwork ? toNetwork.toLowerCase() : undefined,
+          depositAmount: amount
+        });
+
+        const rate = (parseFloat(quote.settleAmount) / parseFloat(quote.depositAmount)).toFixed(8);
+
+        const confirmationText =
+          `🤔 Please confirm your swap:\n\n` +
+          `From: ${quote.depositAmount} ${quote.depositCoin.toUpperCase()}` +
+          `${fromNetwork ? ` on ${fromNetwork}` : ''}\n` +
+          `To: ${quote.settleAmount} ${quote.settleCoin.toUpperCase()}` +
+          `${toNetwork ? ` on ${toNetwork}` : ''}\n\n` +
+          `Rate: 1 ${quote.depositCoin.toUpperCase()} = ${rate} ${quote.settleCoin.toUpperCase()}`;
+
+        userConversations[chatId] = {
+          state: 'awaiting_confirmation',
+          details: {
+            quoteId: quote.id,
+            toCurrency: quote.settleCoin.toUpperCase(),
+            fromCurrency: quote.depositCoin.toUpperCase(),
+            fromCoin,
+            toCoin,
+            fromNetwork,
+            toNetwork
+          }
+        };
+
+        bot.sendMessage(chatId, confirmationText, {
+          reply_markup: {
+            inline_keyboard: [
+              [
+                { text: '✅ Confirm', callback_data: 'confirm_swap' },
+                { text: '✏️ Change Amount', callback_data: 'back_amount' },
+                { text: '❌ Cancel', callback_data: 'cancel_swap' }
+              ],
+              [ { text: '⬅️ Back to coin selection', callback_data: 'back_to_from' } ]
+            ]
+          }
+        });
+
+      } catch (error: any) {
+        console.error('Quote error (entering_amount):', error?.message || error);
+        bot.sendMessage(chatId, '⚠️ Sorry, I couldn\'t get a quote for that pair or amount.', {
+          reply_markup: {
+            inline_keyboard: [[
+              { text: '🔁 Try again', callback_data: 'try_quote' },
+              { text: '🔁 Change pair', callback_data: 'back_to_from' }
+            ]]
+          }
+        });
+        // leave state so user can retry
+      }
+      return;
+    }
 
     // State 2: Awaiting Address
     if (userState && userState.state === 'awaiting_address') {
@@ -501,6 +802,11 @@ I will notify you of any updates. You can type /cancel at any time before sendin
             }
             if (['complete', 'refunded', 'rejected', 'expired'].includes(statusResponse.status)) {
               clearInterval(intervalId);
+              // Offer a quick 'Swap Again' button when finished
+              await bot.sendMessage(chatId, `✨ Swap finished: *${statusResponse.status}*`, {
+                parse_mode: 'Markdown',
+                reply_markup: { inline_keyboard: [[{ text: '🔁 Swap Again', callback_data: 'swap_again' }]] }
+              });
               delete userConversations[chatId];
             }
           } catch (error) {
