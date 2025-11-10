@@ -286,21 +286,38 @@ function setupBotHandlers() {
 
   // --- COMMAND HANDLERS ---
 
-  bot.onText(/\/start/, (msg: Message) => {
-    const chatId = msg.chat.id;
-    const welcomeMessage = `
+  const helpMessage = `
 👋 Welcome to NeuraXchange!
 
-I am a bot that can help you with the following features:
+Here are the available commands:
+/swap - Start a new cryptocurrency swap.
+/price - Check the price of a cryptocurrency pair.
+/alert - Set a price alert.
+/coins - See the list of available coins.
+/help - Show this message again.
 
--   **Crypto Swaps:** You can swap cryptocurrencies by sending a message like "swap 0.1 btc to eth".
--   **Price Checks:** You can check the price of a cryptocurrency by sending a message like "price btc to usdt".
--   **Price Alerts:** You can set a price alert by sending the /alert command.
--   **AI Assistant:** You can ask me any question about cryptocurrencies and I will try to answer it.
+You can also talk to me in natural language. For example: "swap 0.1 btc to eth" or "what is the price of solana".
+`;
 
-How can I help you today?
-  `;
-    bot.sendMessage(chatId, welcomeMessage, { parse_mode: 'Markdown' });
+  bot.onText(/\/start|\/help/, (msg: Message) => {
+    const chatId = msg.chat.id;
+    bot.sendMessage(chatId, helpMessage, { parse_mode: 'Markdown' });
+  });
+
+  bot.onText(/\/swap/, async (msg: Message) => {
+    const chatId = msg.chat.id;
+    const welcomeMessage = `Let's start your swap. Please choose the coin you want to swap FROM:`;
+    const coins = await getAvailableCoins();
+    const popular = ['BTC', 'ETH', 'USDT', 'USDC', 'SOL', 'DAI'];
+    const keyboard = [
+      popular.slice(0, 3).map(c => ({ text: c, callback_data: `from_${c}` })),
+      popular.slice(3, 6).map(c => ({ text: c, callback_data: `from_${c}` })),
+      [{ text: '🔍 More coins...', callback_data: 'from_more' }]
+    ];
+    bot.sendMessage(chatId, welcomeMessage, {
+      reply_markup: { inline_keyboard: keyboard }
+    });
+    userConversations[chatId] = { state: 'selecting_from_coin', details: {} };
   });
 
   // Coins command - Show available coins and allow inspecting networks via buttons
