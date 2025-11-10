@@ -44,7 +44,11 @@ async function getMarketRate(fromId: string, toId: string): Promise<number> {
         vs_currencies: toId,
       },
     });
-    return response.data[fromId][toId];
+    if (response.data && response.data[fromId] && response.data[fromId][toId]) {
+      return response.data[fromId][toId];
+    }
+    console.error('Error fetching market rate from CoinGecko: Invalid response format', response.data);
+    return 0;
   } catch (error) {
     console.error('Error fetching market rate from CoinGecko:', error);
     return 0;
@@ -61,17 +65,16 @@ export async function getFeeBreakdown(from: string, to: string, amount: string):
       return null;
     }
 
-    const [marketRate, variableShift, quote] = await Promise.all([
+    const [marketRate, quote] = await Promise.all([
       getMarketRate(fromId, toId),
-      createVariableShift({ depositCoin: from.toLowerCase(), settleCoin: to.toLowerCase() }),
       getQuote({ depositCoin: from.toLowerCase(), settleCoin: to.toLowerCase(), depositAmount: amount }),
     ]);
 
-    if (marketRate === 0 || !variableShift || !quote) {
+    if (marketRate === 0 || !quote) {
       return null;
     }
 
-    const networkFee = parseFloat(variableShift.settleCoinNetworkFee || '0');
+    const networkFee = 0; // Hardcoded for now, as SideShift API v2 does not provide this in the quote
 
     const marketSettleAmount = parseFloat(amount) * marketRate;
     const actualSettleAmount = parseFloat(quote.settleAmount);
