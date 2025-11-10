@@ -829,7 +829,7 @@ Now select the coin you want to swap TO:`, {
         if (trend) {
           trendMsg = `\n📊 24h trend: ${trend.direction === 'up' ? '⬆️' : trend.direction === 'down' ? '⬇️' : '⏸'} ${trend.trendPct > 0 ? '+' : ''}${trend.trendPct}%`;
         }
-        const fees = await getFeeBreakdown(fromCoin, toCoin, amount);
+        const fees = await getFeeBreakdown(fromCoin, toCoin, amount, fromNetwork, toNetwork);
         if (fees) {
           feeMsg = `\n💸 Fees: Network ${fees.networkFee.toFixed(8)} + Service ${fees.serviceFee.toFixed(8)} = Total ${fees.totalFee.toFixed(8)}`;
         }
@@ -912,12 +912,6 @@ Now select the coin you want to swap TO:`, {
       const detectedNet = detectNetwork(settleAddress);
       if (detectedNet) {
         bot.sendMessage(chatId, `ℹ️ Detected network: ${detectedNet}`);
-      }
-
-      // --- Error prediction for incompatible chains ---
-      const predErr = await predictInputError(fromCurrency, toCurrency, settleAddress);
-      if (predErr) {
-        bot.sendMessage(chatId, `⚠️ Warning: ${predErr}`);
       }
 
       const isValidAddress = WAValidator.validate(settleAddress, toCurrency);

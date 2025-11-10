@@ -55,7 +55,7 @@ async function getMarketRate(fromId: string, toId: string): Promise<number> {
   }
 }
 
-export async function getFeeBreakdown(from: string, to: string, amount: string): Promise<{ networkFee: number; serviceFee: number; totalFee: number; } | null> {
+export async function getFeeBreakdown(from: string, to: string, amount: string, fromNetwork?: string, toNetwork?: string): Promise<{ networkFee: number; serviceFee: number; totalFee: number; } | null> {
   try {
     const fromId = await getCoinId(from);
     const toId = await getCoinId(to);
@@ -67,7 +67,13 @@ export async function getFeeBreakdown(from: string, to: string, amount: string):
 
     const [marketRate, quote] = await Promise.all([
       getMarketRate(fromId, toId),
-      getQuote({ depositCoin: from.toLowerCase(), settleCoin: to.toLowerCase(), depositAmount: amount }),
+      getQuote({ 
+        depositCoin: from.toLowerCase(), 
+        settleCoin: to.toLowerCase(), 
+        depositAmount: amount,
+        depositNetwork: fromNetwork,
+        settleNetwork: toNetwork
+      }),
     ]);
 
     if (marketRate === 0 || !quote) {
