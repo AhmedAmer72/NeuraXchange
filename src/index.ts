@@ -1166,6 +1166,183 @@ ${status.settleAddress ? `📬 Settle Address:\n\`${status.settleAddress.substri
       return;
     }
 
+    // === NEW DCA ORDER SETUP ===
+    if (data === 'new_dca_order') {
+      const keyboard = [
+        [{ text: '💵 USDT', callback_data: 'dca_from_USDT' }, { text: '💵 USDC', callback_data: 'dca_from_USDC' }],
+        [{ text: '₿ BTC', callback_data: 'dca_from_BTC' }, { text: 'Ξ ETH', callback_data: 'dca_from_ETH' }],
+        [{ text: '« Back', callback_data: 'dca_list' }]
+      ];
+      bot.editMessageText(
+        `🔄 *Create DCA Order*\n\n` +
+        `Select the coin you want to swap FROM:`,
+        {
+          chat_id: chatId,
+          message_id: originalMessageId,
+          parse_mode: 'Markdown',
+          reply_markup: { inline_keyboard: keyboard }
+        }
+      );
+      userConversations[chatId] = { state: 'dca_selecting_from', details: {} };
+      return;
+    }
+
+    if (data && data.startsWith('dca_from_')) {
+      const fromCoin = data.replace('dca_from_', '');
+      const keyboard = [
+        [{ text: '💵 USDT', callback_data: 'dca_to_USDT' }, { text: '💵 USDC', callback_data: 'dca_to_USDC' }],
+        [{ text: '₿ BTC', callback_data: 'dca_to_BTC' }, { text: 'Ξ ETH', callback_data: 'dca_to_ETH' }],
+        [{ text: '« Back', callback_data: 'new_dca_order' }]
+      ];
+      userConversations[chatId] = { state: 'dca_selecting_to', details: { fromCoin } };
+      bot.editMessageText(
+        `🔄 *Create DCA Order*\n\n` +
+        `From: ${fromCoin}\n\n` +
+        `Select the coin you want to swap TO:`,
+        {
+          chat_id: chatId,
+          message_id: originalMessageId,
+          parse_mode: 'Markdown',
+          reply_markup: { inline_keyboard: keyboard }
+        }
+      );
+      return;
+    }
+
+    if (data && data.startsWith('dca_to_')) {
+      const toCoin = data.replace('dca_to_', '');
+      const fromCoin = userState?.details?.fromCoin || 'BTC';
+      const keyboard = [
+        [{ text: '⏰ Hourly', callback_data: 'dca_freq_hourly' }, { text: '📅 Daily', callback_data: 'dca_freq_daily' }],
+        [{ text: '📆 Weekly', callback_data: 'dca_freq_weekly' }, { text: '🗓️ Monthly', callback_data: 'dca_freq_monthly' }],
+        [{ text: '« Back', callback_data: `dca_from_${fromCoin}` }]
+      ];
+      userConversations[chatId] = { state: 'dca_selecting_freq', details: { fromCoin, toCoin } };
+      bot.editMessageText(
+        `🔄 *Create DCA Order*\n\n` +
+        `From: ${fromCoin}\n` +
+        `To: ${toCoin}\n\n` +
+        `Select how often to swap:`,
+        {
+          chat_id: chatId,
+          message_id: originalMessageId,
+          parse_mode: 'Markdown',
+          reply_markup: { inline_keyboard: keyboard }
+        }
+      );
+      return;
+    }
+
+    if (data && data.startsWith('dca_freq_')) {
+      const frequency = data.replace('dca_freq_', '') as 'hourly' | 'daily' | 'weekly' | 'monthly';
+      const { fromCoin, toCoin } = userState?.details || { fromCoin: 'BTC', toCoin: 'USDT' };
+      userConversations[chatId] = { 
+        state: 'dca_entering_amount', 
+        details: { fromCoin, toCoin, frequency } 
+      };
+      bot.editMessageText(
+        `🔄 *Create DCA Order*\n\n` +
+        `From: ${fromCoin}\n` +
+        `To: ${toCoin}\n` +
+        `Frequency: ${frequency}\n\n` +
+        `Enter the amount of ${fromCoin} to swap each time:`,
+        {
+          chat_id: chatId,
+          message_id: originalMessageId,
+          parse_mode: 'Markdown'
+        }
+      );
+      return;
+    }
+
+    // === NEW LIMIT ORDER SETUP ===
+    if (data === 'new_limit_order') {
+      const keyboard = [
+        [{ text: '₿ BTC', callback_data: 'limit_from_BTC' }, { text: 'Ξ ETH', callback_data: 'limit_from_ETH' }],
+        [{ text: '◎ SOL', callback_data: 'limit_from_SOL' }, { text: '◈ XRP', callback_data: 'limit_from_XRP' }],
+        [{ text: '« Back', callback_data: 'limit_list' }]
+      ];
+      bot.editMessageText(
+        `📋 *Create Limit Order*\n\n` +
+        `Swap automatically when a target rate is reached.\n\n` +
+        `Select the coin you want to swap FROM:`,
+        {
+          chat_id: chatId,
+          message_id: originalMessageId,
+          parse_mode: 'Markdown',
+          reply_markup: { inline_keyboard: keyboard }
+        }
+      );
+      userConversations[chatId] = { state: 'limit_selecting_from', details: {} };
+      return;
+    }
+
+    if (data && data.startsWith('limit_from_')) {
+      const fromCoin = data.replace('limit_from_', '');
+      const keyboard = [
+        [{ text: '💵 USDT', callback_data: 'limit_to_USDT' }, { text: '💵 USDC', callback_data: 'limit_to_USDC' }],
+        [{ text: '₿ BTC', callback_data: 'limit_to_BTC' }, { text: 'Ξ ETH', callback_data: 'limit_to_ETH' }],
+        [{ text: '« Back', callback_data: 'new_limit_order' }]
+      ];
+      userConversations[chatId] = { state: 'limit_selecting_to', details: { fromCoin } };
+      bot.editMessageText(
+        `📋 *Create Limit Order*\n\n` +
+        `From: ${fromCoin}\n\n` +
+        `Select the coin you want to swap TO:`,
+        {
+          chat_id: chatId,
+          message_id: originalMessageId,
+          parse_mode: 'Markdown',
+          reply_markup: { inline_keyboard: keyboard }
+        }
+      );
+      return;
+    }
+
+    if (data && data.startsWith('limit_to_')) {
+      const toCoin = data.replace('limit_to_', '');
+      const fromCoin = userState?.details?.fromCoin || 'BTC';
+      userConversations[chatId] = { 
+        state: 'limit_entering_rate', 
+        details: { fromCoin, toCoin } 
+      };
+      
+      // Try to get current rate for context
+      try {
+        const quote = await getQuote({
+          depositCoin: fromCoin.toLowerCase(),
+          settleCoin: toCoin.toLowerCase(),
+          depositAmount: '1'
+        });
+        const currentRate = parseFloat(quote.settleAmount).toFixed(6);
+        bot.editMessageText(
+          `📋 *Create Limit Order*\n\n` +
+          `From: ${fromCoin}\n` +
+          `To: ${toCoin}\n` +
+          `Current rate: 1 ${fromCoin} = ${currentRate} ${toCoin}\n\n` +
+          `Enter the target rate (${toCoin} per ${fromCoin}):`,
+          {
+            chat_id: chatId,
+            message_id: originalMessageId,
+            parse_mode: 'Markdown'
+          }
+        );
+      } catch {
+        bot.editMessageText(
+          `📋 *Create Limit Order*\n\n` +
+          `From: ${fromCoin}\n` +
+          `To: ${toCoin}\n\n` +
+          `Enter the target rate (${toCoin} per ${fromCoin}):`,
+          {
+            chat_id: chatId,
+            message_id: originalMessageId,
+            parse_mode: 'Markdown'
+          }
+        );
+      }
+      return;
+    }
+
     // === DCA CALLBACKS ===
     if (data === 'dca_pause') {
       const schedules = getUserDCAOrders(chatId);
@@ -1748,6 +1925,163 @@ Now select the coin you want to swap TO:`, {
           }
         }
       );
+      delete userConversations[chatId];
+      return;
+    }
+
+    // State: DCA entering amount
+    if (userState && userState.state === 'dca_entering_amount') {
+      const amount = msg.text.trim();
+      
+      if (!/^\d*\.?\d+$/.test(amount) || parseFloat(amount) <= 0) {
+        bot.sendMessage(chatId, '⚠️ Please enter a valid positive number (e.g., 0.1).');
+        return;
+      }
+
+      const { fromCoin, toCoin, frequency } = userState.details;
+      
+      bot.sendMessage(chatId,
+        `🔄 *DCA Order Setup*\n\n` +
+        `From: ${fromCoin}\n` +
+        `To: ${toCoin}\n` +
+        `Amount: ${amount} ${fromCoin}\n` +
+        `Frequency: ${frequency}\n\n` +
+        `Enter your ${toCoin} receiving address:`,
+        { parse_mode: 'Markdown' }
+      );
+      
+      userConversations[chatId] = {
+        state: 'dca_entering_address',
+        details: { ...userState.details, amount }
+      };
+      return;
+    }
+
+    // State: DCA entering address
+    if (userState && userState.state === 'dca_entering_address') {
+      const settleAddress = msg.text.trim();
+      const { fromCoin, toCoin, frequency, amount } = userState.details;
+      
+      try {
+        const order = await createDCAOrder(
+          chatId,
+          fromCoin,
+          toCoin,
+          amount,
+          frequency,
+          settleAddress
+        );
+        
+        bot.sendMessage(chatId,
+          `✅ *DCA Order Created!*\n\n` +
+          `📊 ${amount} ${fromCoin} → ${toCoin}\n` +
+          `⏰ Frequency: ${frequency}\n` +
+          `📍 Address: \`${settleAddress.substring(0, 20)}...\`\n\n` +
+          `Your first swap will execute according to the schedule.\n` +
+          `Use /dca to manage your orders.`,
+          { 
+            parse_mode: 'Markdown',
+            reply_markup: {
+              inline_keyboard: [[{ text: '📋 View DCA Orders', callback_data: 'dca_list' }]]
+            }
+          }
+        );
+      } catch (error) {
+        bot.sendMessage(chatId, '⚠️ Error creating DCA order. Please try again.');
+      }
+      
+      delete userConversations[chatId];
+      return;
+    }
+
+    // State: Limit order entering rate
+    if (userState && userState.state === 'limit_entering_rate') {
+      const targetRate = parseFloat(msg.text.trim());
+      
+      if (isNaN(targetRate) || targetRate <= 0) {
+        bot.sendMessage(chatId, '⚠️ Please enter a valid positive number for the rate.');
+        return;
+      }
+
+      const { fromCoin, toCoin } = userState.details;
+      
+      bot.sendMessage(chatId,
+        `📋 *Limit Order Setup*\n\n` +
+        `From: ${fromCoin}\n` +
+        `To: ${toCoin}\n` +
+        `Target rate: ${targetRate} ${toCoin}/${fromCoin}\n\n` +
+        `Enter the amount of ${fromCoin} to swap:`,
+        { parse_mode: 'Markdown' }
+      );
+      
+      userConversations[chatId] = {
+        state: 'limit_entering_amount',
+        details: { ...userState.details, targetRate }
+      };
+      return;
+    }
+
+    // State: Limit order entering amount
+    if (userState && userState.state === 'limit_entering_amount') {
+      const amount = msg.text.trim();
+      
+      if (!/^\d*\.?\d+$/.test(amount) || parseFloat(amount) <= 0) {
+        bot.sendMessage(chatId, '⚠️ Please enter a valid positive number (e.g., 0.1).');
+        return;
+      }
+
+      const { fromCoin, toCoin, targetRate } = userState.details;
+      
+      bot.sendMessage(chatId,
+        `📋 *Limit Order Setup*\n\n` +
+        `From: ${amount} ${fromCoin}\n` +
+        `To: ${toCoin}\n` +
+        `Target rate: ${targetRate}\n\n` +
+        `Enter your ${toCoin} receiving address:`,
+        { parse_mode: 'Markdown' }
+      );
+      
+      userConversations[chatId] = {
+        state: 'limit_entering_address',
+        details: { ...userState.details, amount }
+      };
+      return;
+    }
+
+    // State: Limit order entering address
+    if (userState && userState.state === 'limit_entering_address') {
+      const settleAddress = msg.text.trim();
+      const { fromCoin, toCoin, targetRate, amount } = userState.details;
+      
+      try {
+        const order = await createLimitOrder(
+          chatId,
+          fromCoin,
+          toCoin,
+          amount,
+          targetRate,
+          'below', // Default to below for now
+          settleAddress
+        );
+        
+        bot.sendMessage(chatId,
+          `✅ *Limit Order Created!*\n\n` +
+          `📊 ${amount} ${fromCoin} → ${toCoin}\n` +
+          `🎯 Target rate: ${targetRate}\n` +
+          `📍 Address: \`${settleAddress.substring(0, 20)}...\`\n\n` +
+          `I'll execute this swap when the rate reaches your target.\n` +
+          `Use /limitorder to manage your orders.`,
+          { 
+            parse_mode: 'Markdown',
+            reply_markup: {
+              inline_keyboard: [[{ text: '📋 View Limit Orders', callback_data: 'limit_list' }]]
+            }
+          }
+        );
+      } catch (error) {
+        bot.sendMessage(chatId, '⚠️ Error creating limit order. Please try again.');
+      }
+      
       delete userConversations[chatId];
       return;
     }

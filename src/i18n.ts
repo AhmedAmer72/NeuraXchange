@@ -1,7 +1,7 @@
 // Internationalization (i18n) Support
-// Multi-language support for EN, ES, RU, CN
+// Multi-language support for EN, ES, FR, RU, CN
 
-export type Language = 'en' | 'es' | 'ru' | 'zh';
+export type Language = 'en' | 'es' | 'fr' | 'ru' | 'zh';
 
 export interface TranslationStrings {
   // General
@@ -192,6 +192,69 @@ const translations: { [key in Language]: TranslationStrings } = {
     statusRefunded: '↩️ Reembolsado',
     statusExpired: '⏰ Expirado',
   },
+
+  fr: {
+    // General
+    welcome: '👋 *Bienvenue sur NeuraXchange!*\n\nJe vous aide à échanger des cryptomonnaies rapidement et en toute sécurité.',
+    help: 'Commandes disponibles:',
+    error: '⚠️ Une erreur s\'est produite. Veuillez réessayer.',
+    success: '✅ Succès!',
+    cancel: '❌ Annulé',
+    confirm: '✅ Confirmer',
+    back: '⬅️ Retour',
+    loading: '⏳ Chargement...',
+    
+    // Commands
+    cmdSwap: '/swap - Démarrer un nouvel échange',
+    cmdPrice: '/price - Vérifier les taux de change',
+    cmdLimits: '/limits - Voir les limites min/max',
+    cmdHistory: '/history - Historique des échanges',
+    cmdAlerts: '/myalerts - Gérer les alertes de prix',
+    cmdCoins: '/coins - Lister les cryptos disponibles',
+    cmdStatus: '/status - Vérifier le statut d\'un échange',
+    cmdSettings: '/settings - Paramètres du bot',
+    cmdFavorites: '/favorites - Paires favorites',
+    
+    // Swap flow
+    selectFromCoin: 'Sélectionnez la crypto à échanger:',
+    selectToCoin: 'Sélectionnez la crypto à recevoir:',
+    selectNetwork: 'Sélectionnez le réseau:',
+    enterAmount: 'Entrez le montant à échanger:',
+    confirmSwap: '🤔 Veuillez confirmer votre échange:',
+    swapCreated: '✨ Échange créé! Envoyez vos fonds pour finaliser.',
+    sendFunds: '📤 Veuillez envoyer exactement {amount} {coin} à:',
+    swapComplete: '✅ Échange terminé avec succès!',
+    swapExpired: '⏰ Cet échange a expiré.',
+    
+    // Validation
+    invalidAmount: '⚠️ Veuillez entrer un montant valide.',
+    amountTooLow: '⚠️ Montant trop bas. Minimum: {min} {coin}.',
+    amountTooHigh: '⚠️ Montant trop élevé. Maximum: {max} {coin}.',
+    invalidAddress: '⚠️ Adresse invalide. Veuillez vérifier et réessayer.',
+    rateChanged: '⚠️ Le taux a changé de {change}%. Voulez-vous continuer?',
+    
+    // Alerts
+    alertCreated: '✅ Alerte créée! Je vous préviendrai quand {pair} sera {direction} {rate}.',
+    alertTriggered: '🔔 ALERTE PRIX! {pair} est maintenant à {rate}',
+    noAlerts: '📭 Vous n\'avez aucune alerte active.',
+    
+    // History
+    noHistory: '📭 Aucun historique d\'échange.',
+    swapHistory: '📜 *Votre Historique d\'Échanges*',
+    
+    // Settings
+    languageChanged: '✅ Langue changée en Français',
+    selectLanguage: '🌐 Sélectionnez votre langue:',
+    
+    // Status
+    statusPending: '⏳ En attente',
+    statusWaiting: '⏳ En attente du dépôt',
+    statusProcessing: '🔄 En cours de traitement',
+    statusSettling: '📤 Règlement en cours',
+    statusComplete: '✅ Terminé',
+    statusRefunded: '↩️ Remboursé',
+    statusExpired: '⏰ Expiré',
+  },
   
   ru: {
     // General
@@ -361,6 +424,7 @@ export function getAvailableLanguages(): { code: Language; name: string; flag: s
   return [
     { code: 'en', name: 'English', flag: '🇺🇸' },
     { code: 'es', name: 'Español', flag: '🇪🇸' },
+    { code: 'fr', name: 'Français', flag: '🇫🇷' },
     { code: 'ru', name: 'Русский', flag: '🇷🇺' },
     { code: 'zh', name: '中文', flag: '🇨🇳' },
   ];
