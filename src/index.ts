@@ -1504,12 +1504,13 @@ ${status.settleAddress ? `📬 Settle Address:\n\`${status.settleAddress.substri
     }
 
     // === LANGUAGE CALLBACKS ===
-    if (data && data.startsWith('lang_')) {
-      const lang = data.replace('lang_', '') as Language;
+    if (data && data.startsWith('set_lang_')) {
+      const lang = data.replace('set_lang_', '') as Language;
       await setUserLanguage(chatId, lang);
       const languages: Record<string, string> = {
-        'en': 'English 🇬🇧',
+        'en': 'English 🇺🇸',
         'es': 'Español 🇪🇸',
+        'fr': 'Français 🇫🇷',
         'ru': 'Русский 🇷🇺',
         'zh': '中文 🇨🇳'
       };
