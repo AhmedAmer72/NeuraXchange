@@ -383,21 +383,31 @@ const translations: { [key in Language]: TranslationStrings } = {
   }
 };
 
-// User language preferences (in-memory, should sync with database)
+// User language preferences (in-memory cache, synced with database)
 const userLanguages: Map<number, Language> = new Map();
 
 /**
- * Get user's language
+ * Get user's language (from cache)
  */
 export function getUserLanguage(chatId: number): Language {
   return userLanguages.get(chatId) || 'en';
 }
 
 /**
- * Set user's language
+ * Set user's language (updates cache, should also update DB)
  */
-export function setUserLanguage(chatId: number, language: Language): void {
+export async function setUserLanguage(chatId: number, language: Language): Promise<void> {
   userLanguages.set(chatId, language);
+  // Database update is handled separately via updateUserLanguageInDB
+}
+
+/**
+ * Load user's language from database into cache
+ */
+export function loadUserLanguage(chatId: number, language: string): void {
+  if (['en', 'es', 'fr', 'ru', 'zh'].includes(language)) {
+    userLanguages.set(chatId, language as Language);
+  }
 }
 
 /**

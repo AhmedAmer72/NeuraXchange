@@ -9,7 +9,7 @@ import { trainAndSaveNlpModel } from './nlp';
 import express from 'express';
 
 // Database and caching
-import { prisma, getOrCreateUser, disconnectDatabase } from './database';
+import { prisma, getOrCreateUser, disconnectDatabase, updateUserLanguage, getUserLanguageFromDB } from './database';
 import { getCached, setCached, CACHE_TTL, CacheKeys, cleanupExpiredCache } from './cache';
 
 // Advanced features imports
@@ -24,7 +24,7 @@ import { generateQRCodeBuffer, formatCryptoURI, cleanupOldQRFiles } from './qrco
 
 // New feature imports
 import { log, logger } from './logger';
-import { t, getUserLanguage, setUserLanguage, getAvailableLanguages, getStatusText, Language } from './i18n';
+import { t, getUserLanguage, setUserLanguage, loadUserLanguage, getAvailableLanguages, getStatusText, Language } from './i18n';
 import { getGlobalStats, getPopularPairs, getUserAnalytics, formatGlobalStats, formatPopularPairs, formatUserAnalytics } from './analytics';
 import { getUserFavorites, addFavoritePair, removeFavoritePair, formatFavorites, formatFavoritesKeyboard, FavoritePair } from './favorites';
 import { createLimitOrder, getUserLimitOrders, cancelLimitOrder, checkLimitOrders, formatLimitOrders } from './limitOrders';
@@ -318,7 +318,10 @@ function setupBotHandlers() {
 
   // --- COMMAND HANDLERS ---
 
-  const helpMessage = `
+  // Help message in multiple languages
+  function getHelpMessage(lang: Language): string {
+    const messages: Record<Language, string> = {
+      en: `
 👋 *Welcome to NeuraXchange!*
 
 *💱 Swap Commands*
@@ -351,7 +354,146 @@ function setupBotHandlers() {
 /help - Show this help message
 
 💡 Chat naturally! Try: "swap 0.1 BTC to ETH"
-`;
+`,
+      es: `
+👋 *¡Bienvenido a NeuraXchange!*
+
+*💱 Comandos de Intercambio*
+/swap - Iniciar un nuevo intercambio
+/price - Consultar tasas de cambio
+/limits - Ver límites mín/máx para un par
+/status - Ver estado de un intercambio
+
+*📊 Cuenta & Historial*
+/history - Ver tu historial de intercambios
+/myalerts - Gestionar alertas de precio
+/alert - Crear alerta de precio en USD
+/favorites - Acceso rápido a pares favoritos
+
+*🤖 Automatización*
+/limitorder - Órdenes límite
+/dca - Promedio de costo en dólares
+
+*📈 Estadísticas*
+/analytics - Ver tus estadísticas
+/stats - Estadísticas globales
+/popular - Pares más populares
+
+*⚙️ Configuración*
+/settings - Idioma y preferencias
+/referral - Gana recompensas invitando amigos
+
+*ℹ️ Información*
+/coins - Lista de criptomonedas disponibles
+/help - Mostrar este mensaje
+
+💡 ¡Chatea naturalmente! Prueba: "swap 0.1 BTC to ETH"
+`,
+      fr: `
+👋 *Bienvenue sur NeuraXchange!*
+
+*💱 Commandes d'Échange*
+/swap - Démarrer un nouvel échange
+/price - Consulter les taux de change
+/limits - Voir les limites min/max
+/status - Vérifier le statut d'un échange
+
+*📊 Compte & Historique*
+/history - Voir votre historique d'échanges
+/myalerts - Gérer les alertes de prix
+/alert - Créer une alerte de prix en USD
+/favorites - Accès rapide aux paires favorites
+
+*🤖 Automatisation*
+/limitorder - Ordres à cours limité
+/dca - Achats programmés (DCA)
+
+*📈 Statistiques*
+/analytics - Voir vos statistiques
+/stats - Statistiques globales
+/popular - Paires les plus populaires
+
+*⚙️ Paramètres*
+/settings - Langue et préférences
+/referral - Gagnez en parrainant des amis
+
+*ℹ️ Informations*
+/coins - Liste des cryptos disponibles
+/help - Afficher ce message
+
+💡 Discutez naturellement! Essayez: "swap 0.1 BTC to ETH"
+`,
+      ru: `
+👋 *Добро пожаловать в NeuraXchange!*
+
+*💱 Команды Обмена*
+/swap - Начать новый обмен
+/price - Проверить курсы
+/limits - Лимиты мин/макс
+/status - Статус обмена
+
+*📊 Аккаунт & История*
+/history - История обменов
+/myalerts - Управление уведомлениями
+/alert - Установить уведомление о цене
+/favorites - Избранные пары
+
+*🤖 Автоматизация*
+/limitorder - Лимитные ордера
+/dca - Регулярные покупки
+
+*📈 Статистика*
+/analytics - Ваша статистика
+/stats - Глобальная статистика
+/popular - Популярные пары
+
+*⚙️ Настройки*
+/settings - Язык и предпочтения
+/referral - Приглашайте друзей
+
+*ℹ️ Информация*
+/coins - Доступные криптовалюты
+/help - Показать это сообщение
+
+💡 Общайтесь естественно! Попробуйте: "swap 0.1 BTC to ETH"
+`,
+      zh: `
+👋 *欢迎使用 NeuraXchange!*
+
+*💱 兑换命令*
+/swap - 开始新的兑换
+/price - 查看汇率
+/limits - 查看最小/最大限额
+/status - 查看兑换状态
+
+*📊 账户和历史*
+/history - 查看兑换历史
+/myalerts - 管理价格提醒
+/alert - 设置美元价格提醒
+/favorites - 快速访问收藏
+
+*🤖 自动化*
+/limitorder - 限价单
+/dca - 定投计划
+
+*📈 统计*
+/analytics - 您的统计数据
+/stats - 全球统计
+/popular - 热门交易对
+
+*⚙️ 设置*
+/settings - 语言和偏好
+/referral - 邀请好友获得奖励
+
+*ℹ️ 信息*
+/coins - 可用加密货币列表
+/help - 显示此帮助信息
+
+💡 自然对话！试试: "swap 0.1 BTC to ETH"
+`
+    };
+    return messages[lang] || messages.en;
+  }
 
   // /start command with referral support
   bot.onText(/\/start(?:\s+(.+))?/, async (msg: Message, match) => {
@@ -359,7 +501,12 @@ function setupBotHandlers() {
     log.userCommand(chatId, '/start');
     
     // Register user in database
-    await getOrCreateUser(chatId, msg.from?.username, msg.from?.first_name, msg.from?.last_name);
+    const user = await getOrCreateUser(chatId, msg.from?.username, msg.from?.first_name, msg.from?.last_name);
+    
+    // Load user's saved language
+    if (user.language) {
+      loadUserLanguage(chatId, user.language);
+    }
     
     // Check for referral code
     if (match && match[1]) {
@@ -372,12 +519,14 @@ function setupBotHandlers() {
       }
     }
     
-    bot.sendMessage(chatId, helpMessage, { parse_mode: 'Markdown' });
+    const lang = getUserLanguage(chatId);
+    bot.sendMessage(chatId, getHelpMessage(lang), { parse_mode: 'Markdown' });
   });
 
   bot.onText(/\/help$/, (msg: Message) => {
     const chatId = msg.chat.id;
-    bot.sendMessage(chatId, helpMessage, { parse_mode: 'Markdown' });
+    const lang = getUserLanguage(chatId);
+    bot.sendMessage(chatId, getHelpMessage(lang), { parse_mode: 'Markdown' });
   });
 
   bot.onText(/\/swap/, async (msg: Message) => {
@@ -1506,7 +1655,17 @@ ${status.settleAddress ? `📬 Settle Address:\n\`${status.settleAddress.substri
     // === LANGUAGE CALLBACKS ===
     if (data && data.startsWith('set_lang_')) {
       const lang = data.replace('set_lang_', '') as Language;
+      
+      // Update in memory cache
       await setUserLanguage(chatId, lang);
+      
+      // Persist to database
+      try {
+        await updateUserLanguage(chatId, lang);
+      } catch (err) {
+        console.error('Failed to save language to DB:', err);
+      }
+      
       const languages: Record<string, string> = {
         'en': 'English 🇺🇸',
         'es': 'Español 🇪🇸',
@@ -1514,7 +1673,17 @@ ${status.settleAddress ? `📬 Settle Address:\n\`${status.settleAddress.substri
         'ru': 'Русский 🇷🇺',
         'zh': '中文 🇨🇳'
       };
-      bot.editMessageText(`✅ Language set to ${languages[lang] || lang}!`, {
+      
+      // Use the new language for the confirmation
+      const confirmations: Record<string, string> = {
+        'en': `✅ Language set to ${languages[lang]}!`,
+        'es': `✅ Idioma cambiado a ${languages[lang]}!`,
+        'fr': `✅ Langue changée en ${languages[lang]}!`,
+        'ru': `✅ Язык изменён на ${languages[lang]}!`,
+        'zh': `✅ 语言已更改为 ${languages[lang]}!`
+      };
+      
+      bot.editMessageText(confirmations[lang] || confirmations['en'], {
         chat_id: chatId,
         message_id: originalMessageId
       });

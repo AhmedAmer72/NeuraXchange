@@ -182,6 +182,23 @@ export async function getUserSwapStats(chatId: number) {
   };
 }
 
+// Update user language in database
+export async function updateUserLanguage(chatId: number, language: string) {
+  return prisma.user.update({
+    where: { chatId: BigInt(chatId) },
+    data: { language }
+  });
+}
+
+// Get user language from database
+export async function getUserLanguageFromDB(chatId: number): Promise<string | null> {
+  const user = await prisma.user.findUnique({
+    where: { chatId: BigInt(chatId) },
+    select: { language: true }
+  });
+  return user?.language || null;
+}
+
 // Graceful shutdown
 export async function disconnectDatabase() {
   await prisma.$disconnect();
