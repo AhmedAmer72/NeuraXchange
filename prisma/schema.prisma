@@ -1,12 +1,12 @@
 // Prisma schema for NeuraXchange bot
-// Uses SQLite for simplicity (can switch to PostgreSQL for production)
+// Uses PostgreSQL for production (Render), SQLite for local dev
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
