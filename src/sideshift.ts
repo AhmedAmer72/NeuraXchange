@@ -356,6 +356,51 @@ export async function getAvailableCoins() {
   }
 }
 
+/**
+ * Get trading pair info including min/max limits
+ */
+export async function getPairInfo(from: string, to: string, fromNetwork?: string, toNetwork?: string) {
+  console.log(`Fetching pair info for ${from}/${to}...`);
+  
+  try {
+    // Build the pair string with optional networks
+    let pairPath = `${from.toLowerCase()}`;
+    if (fromNetwork) pairPath += `-${fromNetwork.toLowerCase()}`;
+    pairPath += `/${to.toLowerCase()}`;
+    if (toNetwork) pairPath += `-${toNetwork.toLowerCase()}`;
+    
+    const response = await sideshiftApi.get(`/pair/${pairPath}`);
+    
+    console.log(`✅ Pair info for ${from}/${to}:`, {
+      rate: response.data.rate,
+      min: response.data.min,
+      max: response.data.max
+    });
+    
+    return {
+      rate: response.data.rate,
+      min: response.data.min,
+      max: response.data.max,
+      depositCoin: response.data.depositCoin,
+      settleCoin: response.data.settleCoin,
+      depositNetwork: response.data.depositNetwork,
+      settleNetwork: response.data.settleNetwork
+    };
+  } catch (error: any) {
+    console.error(`❌ Error fetching pair info for ${from}/${to}:`, {
+      message: error.message,
+      status: error.response?.status,
+      data: error.response?.data
+    });
+    
+    if (error.response?.status === 400) {
+      const errorMessage = error.response?.data?.error?.message || 'Invalid pair';
+      throw new Error(`SideShift API Error: ${errorMessage}`);
+    }
+    throw error;
+  }
+}
+
 // Test function to verify API connectivity
 export async function testSideShiftConnection() {
   console.log('🧪 Testing SideShift API connection...');

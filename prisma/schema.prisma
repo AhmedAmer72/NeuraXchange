@@ -1,5 +1,5 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
+// Prisma schema for NeuraXchange bot
+// Uses SQLite for simplicity (can switch to PostgreSQL for production)
 
 generator client {
   provider = "prisma-client-js"
@@ -10,12 +10,150 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model User {
+  id           Int      @id @default(autoincrement())
+  chatId       BigInt   @unique
+  username     String?
+  firstName    String?
+  lastName     String?
+  language     String   @default("en")
+  referralCode String?  @unique
+  referredBy   Int?     // ID of user who referred this user
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  alerts       Alert[]
+  swaps        Swap[]
+  settings     UserSettings?
+  favorites    FavoritePair[]
+  limitOrders  LimitOrder[]
+  dcaOrders    DCAOrder[]
+}
+
+model Alert {
+  id          Int       @id @default(autoincrement())
+  userId      Int
+  user        User      @relation(fields: [userId], references: [id])
+  fromCoin    String
+  toCoin      String
+  targetRate  Float
+  direction   String    // 'above' or 'below'
+  isActive    Boolean   @default(true)
+  triggered   Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  triggeredAt DateTime?
+
+  @@index([userId])
+  @@index([isActive])
+}
+
 model Swap {
-  id      Int      @id @default(autoincrement())
-  chatId  BigInt
-  from    String
-  to      String
-  amount  String
-  date    DateTime @default(now())
-  txId    String?
+  id             Int       @id @default(autoincrement())
+  shiftId        String    @unique
+  userId         Int
+  user           User      @relation(fields: [userId], references: [id])
+  fromCoin       String
+  toCoin         String
+  fromNetwork    String?
+  toNetwork      String?
+  depositAmount  String
+  settleAmount   String?
+  depositAddress String?
+  settleAddress  String
+  refundAddress  String?
+  status         String    @default("pending")
+  rate           String?
+  depositHash    String?   // Transaction hash of deposit
+  settleHash     String?   // Transaction hash of settlement
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  completedAt    DateTime?
+
+  @@index([userId])
+  @@index([status])
+  @@index([shiftId])
+}
+
+model UserSettings {
+  id                 Int     @id @default(autoincrement())
+  userId             Int     @unique
+  user               User    @relation(fields: [userId], references: [id])
+  defaultFromCoin    String?
+  defaultToCoin      String?
+  defaultFromNetwork String?
+  defaultToNetwork   String?
+  notifications      Boolean @default(true)
+  language           String  @default("en")
+}
+
+model FavoritePair {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  user        User     @relation(fields: [userId], references: [id])
+  fromCoin    String
+  toCoin      String
+  fromNetwork String?
+  toNetwork   String?
+  label       String?
+  createdAt   DateTime @default(now())
+
+  @@unique([userId, fromCoin, toCoin])
+  @@index([userId])
+}
+
+model LimitOrder {
+  id            Int       @id @default(autoincrement())
+  userId        Int
+  user          User      @relation(fields: [userId], references: [id])
+  fromCoin      String
+  toCoin        String
+  fromNetwork   String?
+  toNetwork     String?
+  amount        String
+  targetRate    Float
+  direction     String    // 'above' or 'below'
+  settleAddress String
+  refundAddress String?
+  isActive      Boolean   @default(true)
+  executedAt    DateTime?
+  shiftId       String?
+  createdAt     DateTime  @default(now())
+
+  @@index([userId])
+  @@index([isActive])
+}
+
+model DCAOrder {
+  id              Int       @id @default(autoincrement())
+  userId          Int
+  user            User      @relation(fields: [userId], references: [id])
+  fromCoin        String
+  toCoin          String
+  fromNetwork     String?
+  toNetwork       String?
+  amount          String
+  frequency       String    // 'hourly', 'daily', 'weekly', 'monthly'
+  settleAddress   String
+  refundAddress   String?
+  isActive        Boolean   @default(true)
+  totalExecutions Int       @default(0)
+  maxExecutions   Int?
+  lastExecutedAt  DateTime?
+  nextExecutionAt DateTime
+  createdAt       DateTime  @default(now())
+
+  @@index([userId])
+  @@index([isActive])
+  @@index([nextExecutionAt])
+}
+
+model CacheEntry {
+  id        Int      @id @default(autoincrement())
+  key       String   @unique
+  value     String   // JSON stringified
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([key])
+  @@index([expiresAt])
 }

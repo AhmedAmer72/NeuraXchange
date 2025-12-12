@@ -4,17 +4,37 @@ import { NlpManager } from 'node-nlp';
 
 import * as fs from 'fs';
 import WAValidator from 'multicoin-address-validator';
-import { getQuote, createShift, pollShiftStatus, cancelShift, getAvailableCoins } from './sideshift';
+import { getQuote, createShift, pollShiftStatus, cancelShift, getAvailableCoins, getPairInfo } from './sideshift';
 import { trainAndSaveNlpModel } from './nlp';
 import express from 'express';
+
+// Database and caching
+import { prisma, getOrCreateUser, disconnectDatabase } from './database';
+import { getCached, setCached, CACHE_TTL, CacheKeys, cleanupExpiredCache } from './cache';
+
 // Advanced features imports
-import { getMarketTrend } from './marketData';
+import { getMarketTrend, getCurrentRate } from './marketData';
 import { getFeeBreakdown } from './fees';
-import { addAlert, checkAlerts, getAlertsForPair } from './alerts';
-import { addSwap, getUserHistory } from './history';
+import { addAlert, checkAlerts, getUserAlerts, deleteAlert } from './alerts';
+import { addSwap, getUserHistory, getSwapStats, recordShift, updateShiftStatus, formatSwapHistory, formatSwapStats, getShiftRecord } from './history';
 import { detectNetwork } from './addressDetect';
 import { predictInputError } from './errorPredict';
 import { handleNaturalLanguage } from './aiAssistant';
+import { generateQRCodeBuffer, formatCryptoURI, cleanupOldQRFiles } from './qrcode';
+
+// New feature imports
+import { log, logger } from './logger';
+import { t, getUserLanguage, setUserLanguage, getAvailableLanguages, getStatusText, Language } from './i18n';
+import { getGlobalStats, getPopularPairs, getUserAnalytics, formatGlobalStats, formatPopularPairs, formatUserAnalytics } from './analytics';
+import { getUserFavorites, addFavoritePair, removeFavoritePair, formatFavorites, formatFavoritesKeyboard, FavoritePair } from './favorites';
+import { createLimitOrder, getUserLimitOrders, cancelLimitOrder, checkLimitOrders, formatLimitOrders } from './limitOrders';
+import { createDCAOrder, getActiveDCAOrders, getUserDCAOrders, toggleDCAOrder, pauseDCAOrder, resumeDCAOrder, deleteDCAOrder, executeDCAOrders, formatDCAOrders, getFrequencyOptions } from './dca';
+import { getReferralCode, applyReferralCode, getReferralStats, formatReferralInfo, parseReferralFromStart } from './referral';
+import { getExplorerUrl, ShiftStatus } from './types/sideshift';
+import { 
+  getConversation, setConversation, updateConversation, clearConversation, 
+  clearAllConversations, startSwapFlow, hasActiveConversation, UserConversation 
+} from './conversation';
 
 dotenv.config();
 
@@ -239,6 +259,18 @@ async function startApplication() {
     // 7. Start periodic alert checks
     setInterval(() => checkAlerts(bot), 30000); // Check every 30 seconds
     console.log('⏰ Price alert checker started');
+
+    // 8. Start periodic cache cleanup
+    setInterval(async () => {
+      const cleaned = await cleanupExpiredCache();
+      if (cleaned > 0) console.log(`🧹 Cleaned ${cleaned} expired cache entries`);
+    }, 60 * 60 * 1000); // Every hour
+
+    // 9. Start periodic QR file cleanup
+    setInterval(() => {
+      const cleaned = cleanupOldQRFiles();
+      if (cleaned > 0) console.log(`🧹 Cleaned ${cleaned} old QR code files`);
+    }, 60 * 60 * 1000); // Every hour
     
   } catch (error: any) {
     console.error('❌ Failed to start application:', error);
@@ -287,31 +319,75 @@ function setupBotHandlers() {
   // --- COMMAND HANDLERS ---
 
   const helpMessage = `
-👋 Welcome to NeuraXchange!
+👋 *Welcome to NeuraXchange!*
 
-Here are the available commands:
-/swap - Start a new cryptocurrency swap.
-/price - Check the price of a cryptocurrency pair.
-/alert - Set a price alert.
-/coins - See the list of available coins.
+*💱 Swap Commands*
+/swap - Start a new cryptocurrency swap
+/price - Check exchange rates
+/limits - View min/max limits for a pair
+/status - Check status of a swap
 
+*📊 Account & History*
+/history - View your swap history
+/myalerts - Manage price alerts
+/alert - Set USD price alert (BTC, ETH, etc.)
+/favorites - Quick access to favorite pairs
 
-You can also talk to me in natural language. For example: "swap 0.1 btc to eth" or "what is the price of solana".
+*🤖 Automation*
+/limitorder - Set limit orders (swap at target price)
+/dca - Dollar-cost averaging (recurring swaps)
+
+*📈 Analytics*
+/analytics - View your statistics
+/stats - Global platform statistics
+/popular - Most popular trading pairs
+
+*⚙️ Settings*
+/settings - Language & preferences
+/referral - Earn rewards by inviting friends
+
+*ℹ️ Info*
+/coins - List available cryptocurrencies
+/help - Show this help message
+
+💡 Chat naturally! Try: "swap 0.1 BTC to ETH"
 `;
 
-  bot.onText(/\/start|\/help/, (msg: Message) => {
+  // /start command with referral support
+  bot.onText(/\/start(?:\s+(.+))?/, async (msg: Message, match) => {
+    const chatId = msg.chat.id;
+    log.userCommand(chatId, '/start');
+    
+    // Register user in database
+    await getOrCreateUser(chatId, msg.from?.username, msg.from?.first_name, msg.from?.last_name);
+    
+    // Check for referral code
+    if (match && match[1]) {
+      const refCode = parseReferralFromStart(match[1]);
+      if (refCode) {
+        const result = await applyReferralCode(chatId, refCode);
+        if (result.success) {
+          bot.sendMessage(chatId, `🎉 Referral code applied! You were referred by another user.`);
+        }
+      }
+    }
+    
+    bot.sendMessage(chatId, helpMessage, { parse_mode: 'Markdown' });
+  });
+
+  bot.onText(/\/help$/, (msg: Message) => {
     const chatId = msg.chat.id;
     bot.sendMessage(chatId, helpMessage, { parse_mode: 'Markdown' });
   });
 
   bot.onText(/\/swap/, async (msg: Message) => {
     const chatId = msg.chat.id;
-    const welcomeMessage = `Let's start your swap. Please choose the coin you want to swap FROM:`;
+    const welcomeMessage = `Let's start your swap! 🔄\n\nChoose the coin you want to swap FROM:`;
     const coins = await getAvailableCoins();
-    const popular = ['BTC', 'ETH', 'USDT', 'USDC', 'SOL', 'DAI'];
     const keyboard = [
-      popular.slice(0, 3).map(c => ({ text: c, callback_data: `from_${c}` })),
-      popular.slice(3, 6).map(c => ({ text: c, callback_data: `from_${c}` })),
+      [{ text: '💵 USDT', callback_data: 'from_USDT' }, { text: '💵 USDC', callback_data: 'from_USDC' }],
+      [{ text: '₿ BTC', callback_data: 'from_BTC' }, { text: 'Ξ ETH', callback_data: 'from_ETH' }],
+      [{ text: '◎ SOL', callback_data: 'from_SOL' }, { text: '◈ DAI', callback_data: 'from_DAI' }],
       [{ text: '🔍 More coins...', callback_data: 'from_more' }]
     ];
     bot.sendMessage(chatId, welcomeMessage, {
@@ -404,19 +480,388 @@ You can also talk to me in natural language. For example: "swap 0.1 btc to eth" 
     bot.sendMessage(chatId, 'Select a base coin to check price (1 unit):', { reply_markup: { inline_keyboard: rows } });
   });
 
-  bot.onText(/\/alert/, async (msg: Message) => {
+  bot.onText(/\/alert$/, async (msg: Message) => {
     const chatId = msg.chat.id;
-    const coins = await getAvailableCoins();
-    const popular = ['BTC', 'ETH', 'USDT', 'USDC', 'SOL', 'DAI'];
+    // Default to USD (USDT) alerts - much simpler for users!
     const keyboard = [
-      popular.slice(0, 3).map(c => ({ text: c, callback_data: `alert_from_${c}` })),
-      popular.slice(3, 6).map(c => ({ text: c, callback_data: `alert_from_${c}` })),
-      [{ text: '🔍 More coins...', callback_data: 'alert_from_more' }]
+      [{ text: '₿ BTC/USD', callback_data: 'alert_usd_BTC' }, { text: 'Ξ ETH/USD', callback_data: 'alert_usd_ETH' }],
+      [{ text: '◎ SOL/USD', callback_data: 'alert_usd_SOL' }, { text: '◈ XRP/USD', callback_data: 'alert_usd_XRP' }],
+      [{ text: '🐕 DOGE/USD', callback_data: 'alert_usd_DOGE' }, { text: '🔗 LINK/USD', callback_data: 'alert_usd_LINK' }],
+      [{ text: '⚙️ Advanced (custom pair)', callback_data: 'alert_advanced' }]
     ];
-    bot.sendMessage(chatId, 'Select the base coin for the alert (FROM):', {
+    bot.sendMessage(chatId, '🔔 *Set Price Alert*\n\nGet notified when a coin reaches your target price in USD!\n\nSelect a coin:', {
+      parse_mode: 'Markdown',
       reply_markup: { inline_keyboard: keyboard }
     });
-    userConversations[chatId] = { state: 'setting_alert_from', details: {} };
+    userConversations[chatId] = { state: 'setting_alert_from', details: { toCoin: 'USDT' } };
+  });
+
+  // === NEW COMMAND: /myalerts - View active price alerts ===
+  bot.onText(/\/myalerts/, async (msg: Message) => {
+    const chatId = msg.chat.id;
+    try {
+      const alerts = await getUserAlerts(chatId);
+      
+      if (alerts.length === 0) {
+        bot.sendMessage(chatId, "📭 You don't have any active alerts.\n\nUse /alert to create one!", {
+          reply_markup: {
+            inline_keyboard: [[{ text: '➕ Create Alert', callback_data: 'new_alert' }]]
+          }
+        });
+        return;
+      }
+
+      let message = "🔔 *Your Active Alerts*\n\n";
+      const keyboard: any[] = [];
+
+      alerts.forEach((alert: any, index: number) => {
+        const emoji = alert.direction === 'above' ? '⬆️' : '⬇️';
+        const isUsdAlert = alert.toCoin.toUpperCase() === 'USDT' || alert.toCoin.toUpperCase() === 'USDC';
+        const pairDisplay = isUsdAlert 
+          ? `${alert.fromCoin.toUpperCase()}/USD` 
+          : `${alert.fromCoin.toUpperCase()}/${alert.toCoin.toUpperCase()}`;
+        const rateDisplay = isUsdAlert 
+          ? `$${parseFloat(alert.targetRate).toLocaleString()}` 
+          : alert.targetRate;
+        
+        message += `${index + 1}. ${emoji} *${pairDisplay}*\n`;
+        message += `   Trigger: ${alert.direction} ${rateDisplay}\n`;
+        message += `   Created: ${new Date(alert.createdAt).toLocaleDateString()}\n\n`;
+        
+        keyboard.push([{ text: `🗑️ Delete Alert #${index + 1}`, callback_data: `delete_alert_${alert.id}` }]);
+      });
+
+      keyboard.push([{ text: '➕ Create New Alert', callback_data: 'new_alert' }]);
+
+      bot.sendMessage(chatId, message, {
+        parse_mode: 'Markdown',
+        reply_markup: { inline_keyboard: keyboard }
+      });
+    } catch (error) {
+      bot.sendMessage(chatId, "⚠️ Error fetching alerts. Please try again.");
+    }
+  });
+
+  // === NEW COMMAND: /history - View swap history ===
+  bot.onText(/\/history/, async (msg: Message) => {
+    const chatId = msg.chat.id;
+    try {
+      bot.sendMessage(chatId, "⏳ Loading your swap history...");
+      
+      const swaps = await getUserHistory(chatId, 10);
+      const stats = await getSwapStats(chatId);
+      
+      const historyMessage = formatSwapHistory(swaps);
+      const statsMessage = stats ? formatSwapStats(stats) : '';
+      
+      const fullMessage = `${historyMessage}\n${statsMessage}`;
+      
+      bot.sendMessage(chatId, fullMessage, {
+        parse_mode: 'Markdown',
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '🔁 New Swap', callback_data: 'swap_again' }],
+            [{ text: '📊 Full Stats', callback_data: 'full_stats' }]
+          ]
+        }
+      });
+    } catch (error) {
+      console.error('Error fetching history:', error);
+      bot.sendMessage(chatId, "⚠️ Error fetching history. Please try again.");
+    }
+  });
+
+  // === NEW COMMAND: /limits - View min/max limits for a pair ===
+  bot.onText(/\/limits$/, async (msg: Message) => {
+    const chatId = msg.chat.id;
+    const popular = ['BTC', 'ETH', 'USDT', 'USDC', 'SOL', 'DAI'];
+    const keyboard = [
+      popular.slice(0, 3).map(c => ({ text: c, callback_data: `limits_from_${c}` })),
+      popular.slice(3, 6).map(c => ({ text: c, callback_data: `limits_from_${c}` })),
+      [{ text: '🔍 More coins...', callback_data: 'limits_from_more' }]
+    ];
+    bot.sendMessage(chatId, '📊 Check limits for which pair?\n\nSelect the FROM coin:', {
+      reply_markup: { inline_keyboard: keyboard }
+    });
+  });
+
+  bot.onText(/\/limits (.+) to (.+)/, async (msg, match) => {
+    const chatId = msg.chat.id;
+    if (!match) return;
+
+    const from = parseCoinAndNetwork(match[1]);
+    const to = parseCoinAndNetwork(match[2]);
+
+    try {
+      bot.sendMessage(chatId, `⏳ Fetching limits for ${from.coin.toUpperCase()}/${to.coin.toUpperCase()}...`);
+      
+      const pairInfo = await getPairInfo(from.coin, to.coin, from.network, to.network);
+      
+      const message = `📊 *Limits for ${pairInfo.depositCoin.toUpperCase()} → ${pairInfo.settleCoin.toUpperCase()}*
+
+📉 Minimum: ${pairInfo.min} ${pairInfo.depositCoin.toUpperCase()}
+📈 Maximum: ${pairInfo.max} ${pairInfo.depositCoin.toUpperCase()}
+💱 Rate: 1 ${pairInfo.depositCoin.toUpperCase()} ≈ ${pairInfo.rate} ${pairInfo.settleCoin.toUpperCase()}`;
+
+      bot.sendMessage(chatId, message, {
+        parse_mode: 'Markdown',
+        reply_markup: {
+          inline_keyboard: [[{ text: '🔁 Swap Now', callback_data: 'swap_again' }]]
+        }
+      });
+    } catch (error) {
+      bot.sendMessage(chatId, `⚠️ Could not fetch limits for that pair. Check the coin tickers and try again.`);
+    }
+  });
+
+  // === NEW COMMAND: /status - Check swap status ===
+  bot.onText(/\/status$/, async (msg: Message) => {
+    const chatId = msg.chat.id;
+    
+    // Check if user has an active swap in conversation
+    const userState = userConversations[chatId];
+    if (userState && userState.shiftId) {
+      try {
+        const status = await pollShiftStatus(userState.shiftId);
+        const message = formatStatusMessage(status);
+        bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
+      } catch (error) {
+        bot.sendMessage(chatId, "⚠️ Could not fetch status. Use `/status <shift_id>` to check a specific swap.", { parse_mode: 'Markdown' });
+      }
+      return;
+    }
+
+    // Check recent swaps from history
+    const swaps = await getUserHistory(chatId, 5);
+    if (swaps.length === 0) {
+      bot.sendMessage(chatId, "📭 No recent swaps found.\n\nUse `/status <shift_id>` to check a specific swap, or /swap to start a new one.", { parse_mode: 'Markdown' });
+      return;
+    }
+
+    const keyboard = swaps.map((swap: any) => [{
+      text: `${swap.fromCoin.toUpperCase()}→${swap.toCoin.toUpperCase()} (${swap.status})`,
+      callback_data: `check_status_${swap.shiftId}`
+    }]);
+
+    bot.sendMessage(chatId, "📋 Select a swap to check its status:", {
+      reply_markup: { inline_keyboard: keyboard }
+    });
+  });
+
+  bot.onText(/\/status (.+)/, async (msg, match) => {
+    const chatId = msg.chat.id;
+    if (!match || !match[1]) return;
+
+    const shiftId = match[1].trim();
+    
+    try {
+      bot.sendMessage(chatId, `⏳ Checking status for shift ${shiftId}...`);
+      const status = await pollShiftStatus(shiftId);
+      const message = formatStatusMessage(status);
+      bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
+    } catch (error) {
+      bot.sendMessage(chatId, `⚠️ Could not find a swap with ID: \`${shiftId}\``, { parse_mode: 'Markdown' });
+    }
+  });
+
+  // Helper function to format status message
+  function formatStatusMessage(status: any): string {
+    const statusEmoji: { [key: string]: string } = {
+      'pending': '⏳',
+      'waiting': '⏳',
+      'processing': '🔄',
+      'settling': '📤',
+      'complete': '✅',
+      'refunded': '↩️',
+      'expired': '⏰',
+      'rejected': '❌'
+    };
+
+    const emoji = statusEmoji[status.status] || '❓';
+
+    return `${emoji} *Swap Status*
+
+🆔 ID: \`${status.id}\`
+📊 Status: *${status.status}*
+
+📥 Deposit: ${status.depositAmount || 'N/A'} ${status.depositCoin?.toUpperCase() || ''}
+📤 Receive: ${status.settleAmount || 'N/A'} ${status.settleCoin?.toUpperCase() || ''}
+
+${status.depositAddress ? `💳 Deposit Address:\n\`${status.depositAddress}\`\n` : ''}
+${status.settleAddress ? `📬 Settle Address:\n\`${status.settleAddress.substring(0, 20)}...\`\n` : ''}
+⏱️ Created: ${new Date(status.createdAt).toLocaleString()}`;
+  }
+
+  // === NEW COMMANDS ===
+
+  // /settings - Language and preferences
+  bot.onText(/\/settings/, async (msg: Message) => {
+    const chatId = msg.chat.id;
+    const currentLang = getUserLanguage(chatId);
+    const languages = getAvailableLanguages();
+    
+    const keyboard = languages.map(lang => [{
+      text: `${lang.flag} ${lang.name}${currentLang === lang.code ? ' ✓' : ''}`,
+      callback_data: `set_lang_${lang.code}`
+    }]);
+    
+    bot.sendMessage(chatId, '⚙️ *Settings*\n\n🌐 Select your language:', {
+      parse_mode: 'Markdown',
+      reply_markup: { inline_keyboard: keyboard }
+    });
+  });
+
+  // /analytics - User statistics
+  bot.onText(/\/analytics/, async (msg: Message) => {
+    const chatId = msg.chat.id;
+    try {
+      bot.sendMessage(chatId, '⏳ Loading your analytics...');
+      const stats = await getUserAnalytics(chatId);
+      if (!stats) {
+        bot.sendMessage(chatId, '📊 No analytics data yet. Complete a swap to see your stats!');
+        return;
+      }
+      bot.sendMessage(chatId, formatUserAnalytics(stats), { parse_mode: 'Markdown' });
+    } catch (error) {
+      bot.sendMessage(chatId, '⚠️ Error loading analytics.');
+    }
+  });
+
+  // /stats - Global platform statistics
+  bot.onText(/\/stats/, async (msg: Message) => {
+    const chatId = msg.chat.id;
+    try {
+      bot.sendMessage(chatId, '⏳ Loading global statistics...');
+      const stats = await getGlobalStats();
+      bot.sendMessage(chatId, formatGlobalStats(stats), { parse_mode: 'Markdown' });
+    } catch (error) {
+      bot.sendMessage(chatId, '⚠️ Error loading statistics.');
+    }
+  });
+
+  // /popular - Most popular trading pairs
+  bot.onText(/\/popular/, async (msg: Message) => {
+    const chatId = msg.chat.id;
+    try {
+      const pairs = await getPopularPairs(10);
+      bot.sendMessage(chatId, formatPopularPairs(pairs), { parse_mode: 'Markdown' });
+    } catch (error) {
+      bot.sendMessage(chatId, '⚠️ Error loading popular pairs.');
+    }
+  });
+
+  // /favorites - Quick access to favorite pairs
+  bot.onText(/\/favorites/, async (msg: Message) => {
+    const chatId = msg.chat.id;
+    try {
+      const favorites = await getUserFavorites(chatId);
+      const message = formatFavorites(favorites);
+      
+      const keyboard: any[] = favorites.map((fav, i) => [{
+        text: `🔄 ${fav.fromCoin.toUpperCase()} → ${fav.toCoin.toUpperCase()}`,
+        callback_data: `quick_swap_${fav.fromCoin}_${fav.toCoin}`
+      }]);
+      keyboard.push([{ text: '➕ Add after next swap', callback_data: 'noop' }]);
+      
+      bot.sendMessage(chatId, message, {
+        parse_mode: 'Markdown',
+        reply_markup: { inline_keyboard: keyboard }
+      });
+    } catch (error) {
+      bot.sendMessage(chatId, '⚠️ Error loading favorites.');
+    }
+  });
+
+  // /referral - Referral program
+  bot.onText(/\/referral/, async (msg: Message) => {
+    const chatId = msg.chat.id;
+    try {
+      const stats = await getReferralStats(chatId);
+      const botInfo = await bot.getMe();
+      const message = formatReferralInfo(stats, botInfo.username || 'NeuraXchangeBot');
+      
+      bot.sendMessage(chatId, message, {
+        parse_mode: 'Markdown',
+        reply_markup: {
+          inline_keyboard: [[
+            { text: '📋 Copy Code', callback_data: `copy_ref_${stats.referralCode}` },
+            { text: '📤 Share', switch_inline_query: `Join NeuraXchange with my code: ${stats.referralCode}` }
+          ]]
+        }
+      });
+    } catch (error) {
+      bot.sendMessage(chatId, '⚠️ Error loading referral info.');
+    }
+  });
+
+  // /limitorder - Set limit orders
+  bot.onText(/\/limitorder/, async (msg: Message) => {
+    const chatId = msg.chat.id;
+    const orders = getUserLimitOrders(chatId);
+    
+    if (orders.length > 0) {
+      const message = formatLimitOrders(orders);
+      const keyboard = orders.map((order, i) => [{
+        text: `❌ Cancel Order #${i + 1}`,
+        callback_data: `cancel_limit_${order.id}`
+      }]);
+      keyboard.push([{ text: '➕ Create New Limit Order', callback_data: 'new_limit_order' }]);
+      
+      bot.sendMessage(chatId, message, {
+        parse_mode: 'Markdown',
+        reply_markup: { inline_keyboard: keyboard }
+      });
+    } else {
+      bot.sendMessage(chatId, 
+        `📋 *Limit Orders*\n\n` +
+        `Set a limit order to automatically swap when a target price is reached.\n\n` +
+        `Example: Swap 0.1 BTC to ETH when the rate goes above 20.\n\n` +
+        `Tap below to create a new limit order:`,
+        {
+          parse_mode: 'Markdown',
+          reply_markup: {
+            inline_keyboard: [[{ text: '➕ Create Limit Order', callback_data: 'new_limit_order' }]]
+          }
+        }
+      );
+    }
+  });
+
+  // /dca - Dollar-cost averaging
+  bot.onText(/\/dca/, async (msg: Message) => {
+    const chatId = msg.chat.id;
+    const orders = getActiveDCAOrders(chatId);
+    
+    if (orders.length > 0) {
+      const message = formatDCAOrders(orders);
+      const keyboard = orders.map((order, i) => [
+        { text: order.isActive ? `⏸️ Pause #${i + 1}` : `▶️ Resume #${i + 1}`, callback_data: `toggle_dca_${order.id}` },
+        { text: `🗑️ Delete #${i + 1}`, callback_data: `delete_dca_${order.id}` }
+      ]);
+      keyboard.push([{ text: '➕ Create New DCA Order', callback_data: 'new_dca_order' }]);
+      
+      bot.sendMessage(chatId, message, {
+        parse_mode: 'Markdown',
+        reply_markup: { inline_keyboard: keyboard }
+      });
+    } else {
+      bot.sendMessage(chatId,
+        `🔄 *Dollar-Cost Averaging (DCA)*\n\n` +
+        `Automate your crypto investing with recurring swaps!\n\n` +
+        `Set up automatic swaps on a schedule:\n` +
+        `• ⏰ Hourly\n` +
+        `• 📅 Daily\n` +
+        `• 📆 Weekly\n` +
+        `• 🗓️ Monthly\n\n` +
+        `Tap below to set up DCA:`,
+        {
+          parse_mode: 'Markdown',
+          reply_markup: {
+            inline_keyboard: [[{ text: '➕ Create DCA Order', callback_data: 'new_dca_order' }]]
+          }
+        }
+      );
+    }
   });
 
   bot.onText(/\/price (.+) to (.+)/, async (msg, match) => {
@@ -449,6 +894,472 @@ You can also talk to me in natural language. For example: "swap 0.1 btc to eth" 
     const originalMessageId = callbackQuery.message!.message_id;
     const data = callbackQuery.data;
     await bot.answerCallbackQuery(callbackQuery.id);
+
+    // === NEW: Handle new_alert button ===
+    if (data === 'new_alert') {
+      // Default to USD (USDT) alerts - simpler for users!
+      const keyboard = [
+        [{ text: '₿ BTC/USD', callback_data: 'alert_usd_BTC' }, { text: 'Ξ ETH/USD', callback_data: 'alert_usd_ETH' }],
+        [{ text: '◎ SOL/USD', callback_data: 'alert_usd_SOL' }, { text: '◈ XRP/USD', callback_data: 'alert_usd_XRP' }],
+        [{ text: '🐕 DOGE/USD', callback_data: 'alert_usd_DOGE' }, { text: '🔗 LINK/USD', callback_data: 'alert_usd_LINK' }],
+        [{ text: '⚙️ Advanced (custom pair)', callback_data: 'alert_advanced' }]
+      ];
+      bot.sendMessage(chatId, '🔔 *Set Price Alert*\n\nGet notified when a coin reaches your target price in USD!\n\nSelect a coin:', {
+        parse_mode: 'Markdown',
+        reply_markup: { inline_keyboard: keyboard }
+      });
+      userConversations[chatId] = { state: 'setting_alert_from', details: { toCoin: 'USDT' } };
+      return;
+    }
+
+    // === Handle USD alert quick setup (simplified flow) ===
+    if (data && data.startsWith('alert_usd_')) {
+      const fromCoin = data.replace('alert_usd_', '');
+      userConversations[chatId] = { 
+        state: 'setting_alert_direction', 
+        details: { fromCoin, toCoin: 'USDT' } 
+      };
+      
+      // Fetch current price to show context
+      try {
+        const quote = await getQuote({
+          depositCoin: fromCoin.toLowerCase(),
+          settleCoin: 'usdt',
+          depositAmount: '1'
+        });
+        const currentPrice = parseFloat(quote.settleAmount).toFixed(2);
+        
+        bot.editMessageText(
+          `💰 *${fromCoin}/USD Alert*\n\n` +
+          `Current price: $${currentPrice}\n\n` +
+          `Notify me when the price is:`,
+          {
+            chat_id: chatId,
+            message_id: originalMessageId,
+            parse_mode: 'Markdown',
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: '⬆️ Above (price goes up)', callback_data: 'alert_dir_above' }, { text: '⬇️ Below (price drops)', callback_data: 'alert_dir_below' }],
+                [{ text: '« Back', callback_data: 'new_alert' }]
+              ]
+            }
+          }
+        );
+      } catch (error) {
+        bot.editMessageText(
+          `💰 *${fromCoin}/USD Alert*\n\n` +
+          `Notify me when the price is:`,
+          {
+            chat_id: chatId,
+            message_id: originalMessageId,
+            parse_mode: 'Markdown',
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: '⬆️ Above', callback_data: 'alert_dir_above' }, { text: '⬇️ Below', callback_data: 'alert_dir_below' }],
+                [{ text: '« Back', callback_data: 'new_alert' }]
+              ]
+            }
+          }
+        );
+      }
+      return;
+    }
+
+    // === Handle advanced alert (custom pair) ===
+    if (data === 'alert_advanced') {
+      const popular = ['BTC', 'ETH', 'SOL', 'XRP', 'DOGE', 'LINK'];
+      const keyboard = [
+        popular.slice(0, 3).map(c => ({ text: c, callback_data: `alert_from_${c}` })),
+        popular.slice(3, 6).map(c => ({ text: c, callback_data: `alert_from_${c}` })),
+        [{ text: '🔍 More coins...', callback_data: 'alert_from_more' }],
+        [{ text: '« Back to USD alerts', callback_data: 'new_alert' }]
+      ];
+      bot.editMessageText('⚙️ *Advanced Alert Setup*\n\nSelect the base coin (FROM):', {
+        chat_id: chatId,
+        message_id: originalMessageId,
+        parse_mode: 'Markdown',
+        reply_markup: { inline_keyboard: keyboard }
+      });
+      userConversations[chatId] = { state: 'setting_alert_from', details: {} };
+      return;
+    }
+
+    // === NEW: Handle delete_alert button ===
+    if (data && data.startsWith('delete_alert_')) {
+      const alertId = parseInt(data.replace('delete_alert_', ''));
+      try {
+        const deleted = await deleteAlert(chatId, alertId);
+        if (deleted) {
+          bot.editMessageText('✅ Alert deleted successfully!', {
+            chat_id: chatId,
+            message_id: originalMessageId,
+            reply_markup: {
+              inline_keyboard: [[
+                { text: '📋 View Remaining Alerts', callback_data: 'view_alerts' },
+                { text: '➕ New Alert', callback_data: 'new_alert' }
+              ]]
+            }
+          });
+        } else {
+          bot.sendMessage(chatId, '⚠️ Could not delete alert. It may have already been removed.');
+        }
+      } catch (error) {
+        bot.sendMessage(chatId, '⚠️ Error deleting alert.');
+      }
+      return;
+    }
+
+    // === NEW: Handle view_alerts button ===
+    if (data === 'view_alerts') {
+      const alerts = await getUserAlerts(chatId);
+      if (alerts.length === 0) {
+        bot.editMessageText("📭 You don't have any active alerts.", {
+          chat_id: chatId,
+          message_id: originalMessageId,
+          reply_markup: {
+            inline_keyboard: [[{ text: '➕ Create Alert', callback_data: 'new_alert' }]]
+          }
+        });
+        return;
+      }
+      let message = "🔔 *Your Active Alerts*\n\n";
+      const keyboard: any[] = [];
+      alerts.forEach((alert: any, index: number) => {
+        const emoji = alert.direction === 'above' ? '⬆️' : '⬇️';
+        message += `${index + 1}. ${emoji} *${alert.fromCoin.toUpperCase()}/${alert.toCoin.toUpperCase()}* - ${alert.direction} ${alert.targetRate}\n`;
+        keyboard.push([{ text: `🗑️ Delete #${index + 1}`, callback_data: `delete_alert_${alert.id}` }]);
+      });
+      keyboard.push([{ text: '➕ New Alert', callback_data: 'new_alert' }]);
+      bot.editMessageText(message, {
+        chat_id: chatId,
+        message_id: originalMessageId,
+        parse_mode: 'Markdown',
+        reply_markup: { inline_keyboard: keyboard }
+      });
+      return;
+    }
+
+    // === NEW: Handle limits flow ===
+    if (data && data.startsWith('limits_from_')) {
+      const fromCoin = data.replace('limits_from_', '');
+      if (fromCoin === 'more') {
+        const coins = await getAvailableCoins();
+        const all = coins.map((c: any) => c.coin.toUpperCase()).sort();
+        const rows = [];
+        for (let i = 0; i < all.length; i += 3) {
+          rows.push(all.slice(i, i + 3).map((c: string) => ({ text: c, callback_data: `limits_from_${c}` })));
+        }
+        bot.editMessageText('Select FROM coin for limits:', {
+          chat_id: chatId,
+          message_id: originalMessageId,
+          reply_markup: { inline_keyboard: rows }
+        });
+        return;
+      }
+      const coins = await getAvailableCoins();
+      const all = coins.map((c: any) => c.coin.toUpperCase()).filter((c: string) => c !== fromCoin).sort();
+      const rows = [];
+      for (let i = 0; i < all.length; i += 3) {
+        rows.push(all.slice(i, i + 3).map((c: string) => ({ text: c, callback_data: `limits_to_${fromCoin}_${c}` })));
+      }
+      bot.editMessageText(`Limits for *${fromCoin}* to which coin?`, {
+        chat_id: chatId,
+        message_id: originalMessageId,
+        parse_mode: 'Markdown',
+        reply_markup: { inline_keyboard: rows }
+      });
+      return;
+    }
+
+    if (data && data.startsWith('limits_to_')) {
+      const parts = data.replace('limits_to_', '').split('_');
+      const fromCoin = parts[0];
+      const toCoin = parts[1];
+      try {
+        bot.editMessageText(`⏳ Fetching limits for ${fromCoin}/${toCoin}...`, {
+          chat_id: chatId,
+          message_id: originalMessageId
+        });
+        const pairInfo = await getPairInfo(fromCoin.toLowerCase(), toCoin.toLowerCase());
+        const message = `📊 *Limits for ${fromCoin} → ${toCoin}*
+
+📉 Minimum: ${pairInfo.min} ${fromCoin}
+📈 Maximum: ${pairInfo.max} ${fromCoin}
+💱 Rate: 1 ${fromCoin} ≈ ${pairInfo.rate} ${toCoin}`;
+        bot.sendMessage(chatId, message, {
+          parse_mode: 'Markdown',
+          reply_markup: {
+            inline_keyboard: [[{ text: '🔁 Swap This Pair', callback_data: `from_${fromCoin}` }]]
+          }
+        });
+      } catch (error) {
+        bot.sendMessage(chatId, '⚠️ Could not fetch limits for this pair.');
+      }
+      return;
+    }
+
+    // === NEW: Handle check_status button ===
+    if (data && data.startsWith('check_status_')) {
+      const shiftId = data.replace('check_status_', '');
+      try {
+        const status = await pollShiftStatus(shiftId);
+        const message = formatStatusMessage(status);
+        bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
+      } catch (error) {
+        bot.sendMessage(chatId, '⚠️ Could not fetch status for this swap.');
+      }
+      return;
+    }
+
+    // === NEW: Handle full_stats button ===
+    if (data === 'full_stats') {
+      const stats = await getSwapStats(chatId);
+      if (!stats) {
+        bot.sendMessage(chatId, "📊 No statistics available yet. Complete a swap first!");
+        return;
+      }
+      bot.sendMessage(chatId, formatSwapStats(stats), { parse_mode: 'Markdown' });
+      return;
+    }
+
+    // === FAVORITES CALLBACKS ===
+    if (data && data.startsWith('fav_add_')) {
+      const [fromCoin, toCoin] = data.replace('fav_add_', '').split('_');
+      try {
+        await addFavoritePair(chatId, fromCoin, toCoin);
+        bot.answerCallbackQuery(callbackQuery.id, { text: `⭐ Added ${fromCoin}/${toCoin} to favorites!` });
+      } catch (error) {
+        bot.answerCallbackQuery(callbackQuery.id, { text: '⚠️ Could not add favorite' });
+      }
+      return;
+    }
+
+    if (data && data.startsWith('fav_remove_')) {
+      const favId = parseInt(data.replace('fav_remove_', ''));
+      try {
+        await removeFavoritePair(chatId, favId);
+        const keyboard = await formatFavoritesKeyboard(chatId);
+        bot.editMessageText('⭐ *Your Favorite Pairs*\n\nSelect a pair to quick swap:', {
+          chat_id: chatId,
+          message_id: originalMessageId,
+          parse_mode: 'Markdown',
+          reply_markup: keyboard
+        });
+      } catch (error) {
+        bot.sendMessage(chatId, '⚠️ Could not remove favorite.');
+      }
+      return;
+    }
+
+    if (data && data.startsWith('fav_swap_')) {
+      const [fromCoin, toCoin] = data.replace('fav_swap_', '').split('_');
+      userConversations[chatId] = { 
+        state: 'selecting_to_network', 
+        details: { fromCoin, toCoin } 
+      };
+      bot.editMessageText(`🔁 Quick swap: *${fromCoin}* → *${toCoin}*\n\nEnter the amount to swap:`, {
+        chat_id: chatId,
+        message_id: originalMessageId,
+        parse_mode: 'Markdown'
+      });
+      userConversations[chatId].state = 'awaiting_amount';
+      return;
+    }
+
+    // === DCA CALLBACKS ===
+    if (data === 'dca_pause') {
+      const schedules = getUserDCAOrders(chatId);
+      if (schedules.length === 0) {
+        bot.sendMessage(chatId, '📋 No active DCA schedules to pause.');
+        return;
+      }
+      const keyboard = schedules.filter(s => s.isActive).map(s => [{
+        text: `⏸ ${s.fromCoin}→${s.toCoin} ${s.amount}`,
+        callback_data: `dca_dopause_${s.id}`
+      }]);
+      bot.editMessageText('Select a DCA schedule to pause:', {
+        chat_id: chatId,
+        message_id: originalMessageId,
+        reply_markup: { inline_keyboard: keyboard }
+      });
+      return;
+    }
+
+    if (data && data.startsWith('dca_dopause_')) {
+      const scheduleId = parseInt(data.replace('dca_dopause_', ''));
+      pauseDCAOrder(chatId, scheduleId);
+      bot.editMessageText('⏸ DCA schedule paused.', {
+        chat_id: chatId,
+        message_id: originalMessageId,
+        reply_markup: {
+          inline_keyboard: [[{ text: '📋 View Schedules', callback_data: 'dca_list' }]]
+        }
+      });
+      return;
+    }
+
+    if (data === 'dca_resume') {
+      const schedules = getUserDCAOrders(chatId);
+      const pausedSchedules = schedules.filter(s => !s.isActive);
+      if (pausedSchedules.length === 0) {
+        bot.sendMessage(chatId, '📋 No paused DCA schedules.');
+        return;
+      }
+      const keyboard = pausedSchedules.map(s => [{
+        text: `▶️ ${s.fromCoin}→${s.toCoin} ${s.amount}`,
+        callback_data: `dca_doresume_${s.id}`
+      }]);
+      bot.editMessageText('Select a DCA schedule to resume:', {
+        chat_id: chatId,
+        message_id: originalMessageId,
+        reply_markup: { inline_keyboard: keyboard }
+      });
+      return;
+    }
+
+    if (data && data.startsWith('dca_doresume_')) {
+      const scheduleId = parseInt(data.replace('dca_doresume_', ''));
+      resumeDCAOrder(chatId, scheduleId);
+      bot.editMessageText('▶️ DCA schedule resumed.', {
+        chat_id: chatId,
+        message_id: originalMessageId,
+        reply_markup: {
+          inline_keyboard: [[{ text: '📋 View Schedules', callback_data: 'dca_list' }]]
+        }
+      });
+      return;
+    }
+
+    if (data === 'dca_cancel') {
+      const schedules = getUserDCAOrders(chatId);
+      if (schedules.length === 0) {
+        bot.sendMessage(chatId, '📋 No DCA schedules to cancel.');
+        return;
+      }
+      const keyboard = schedules.map(s => [{
+        text: `❌ ${s.fromCoin}→${s.toCoin} ${s.amount}`,
+        callback_data: `dca_docancel_${s.id}`
+      }]);
+      bot.editMessageText('Select a DCA schedule to cancel:', {
+        chat_id: chatId,
+        message_id: originalMessageId,
+        reply_markup: { inline_keyboard: keyboard }
+      });
+      return;
+    }
+
+    if (data && data.startsWith('dca_docancel_')) {
+      const scheduleId = parseInt(data.replace('dca_docancel_', ''));
+      deleteDCAOrder(chatId, scheduleId);
+      bot.editMessageText('❌ DCA schedule cancelled.', {
+        chat_id: chatId,
+        message_id: originalMessageId,
+        reply_markup: {
+          inline_keyboard: [[{ text: '📋 View Schedules', callback_data: 'dca_list' }]]
+        }
+      });
+      return;
+    }
+
+    if (data === 'dca_list') {
+      const schedules = getUserDCAOrders(chatId);
+      if (schedules.length === 0) {
+        bot.sendMessage(chatId, '📋 No DCA schedules set up yet. Use /dca to create one!');
+        return;
+      }
+      let message = '📋 *Your DCA Schedules*\n\n';
+      for (const schedule of schedules) {
+        const status = schedule.isActive ? '✅ Active' : '⏸ Paused';
+        message += `${status}: ${schedule.amount} ${schedule.fromCoin} → ${schedule.toCoin}\n`;
+        message += `  Frequency: ${schedule.frequency}\n`;
+        message += `  Next: ${schedule.nextExecutionAt.toLocaleDateString()}\n\n`;
+      }
+      bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
+      return;
+    }
+
+    // === LIMIT ORDER CALLBACKS ===
+    if (data === 'limit_cancel') {
+      const orders = await getUserLimitOrders(chatId);
+      if (orders.length === 0) {
+        bot.sendMessage(chatId, '📋 No limit orders to cancel.');
+        return;
+      }
+      const keyboard = orders.map(o => [{
+        text: `❌ ${o.fromCoin}→${o.toCoin} @ ${o.targetRate}`,
+        callback_data: `limit_docancel_${o.id}`
+      }]);
+      bot.editMessageText('Select a limit order to cancel:', {
+        chat_id: chatId,
+        message_id: originalMessageId,
+        reply_markup: { inline_keyboard: keyboard }
+      });
+      return;
+    }
+
+    if (data && data.startsWith('limit_docancel_')) {
+      const orderId = parseInt(data.replace('limit_docancel_', ''));
+      await cancelLimitOrder(chatId, orderId);
+      bot.editMessageText('❌ Limit order cancelled.', {
+        chat_id: chatId,
+        message_id: originalMessageId,
+        reply_markup: {
+          inline_keyboard: [[{ text: '📋 View Orders', callback_data: 'limit_list' }]]
+        }
+      });
+      return;
+    }
+
+    if (data === 'limit_list') {
+      const orders = await getUserLimitOrders(chatId);
+      if (orders.length === 0) {
+        bot.sendMessage(chatId, '📋 No active limit orders. Use /limitorder to create one!');
+        return;
+      }
+      let message = '📋 *Your Limit Orders*\n\n';
+      for (const order of orders) {
+        message += `📊 ${order.amount} ${order.fromCoin} → ${order.toCoin}\n`;
+        message += `  Target Rate: ${order.targetRate}\n`;
+        message += `  Created: ${order.createdAt.toLocaleDateString()}\n\n`;
+      }
+      bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
+      return;
+    }
+
+    // === LANGUAGE CALLBACKS ===
+    if (data && data.startsWith('lang_')) {
+      const lang = data.replace('lang_', '') as Language;
+      await setUserLanguage(chatId, lang);
+      const languages: Record<string, string> = {
+        'en': 'English 🇬🇧',
+        'es': 'Español 🇪🇸',
+        'ru': 'Русский 🇷🇺',
+        'zh': '中文 🇨🇳'
+      };
+      bot.editMessageText(`✅ Language set to ${languages[lang] || lang}!`, {
+        chat_id: chatId,
+        message_id: originalMessageId
+      });
+      return;
+    }
+
+    // === REFERRAL CALLBACKS ===
+    if (data === 'ref_stats') {
+      const stats = await getReferralStats(chatId);
+      if (!stats) {
+        bot.sendMessage(chatId, '📊 No referral statistics yet.');
+        return;
+      }
+      const message = `📊 *Your Referral Stats*
+
+🔗 Your Code: \`${stats.referralCode}\`
+👥 Referrals: ${stats.totalReferrals}
+💰 Total Earnings: ${stats.totalEarnings.toFixed(8)}
+
+Share your code with friends!`;
+      bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
+      return;
+    }
 
     // Alert creation flow
     if (data && data.startsWith('alert_from_')) {
@@ -508,17 +1419,32 @@ Notify when the rate is:`, {
 
     if (data && data.startsWith('alert_dir_')) {
       const direction = data.replace('alert_dir_', '');
-      if (!userState || !userState.details.toCoin) {
+      if (!userState || !userState.details.fromCoin) {
         bot.sendMessage(chatId, '⚠️ Please start a new alert with /alert.');
         return;
       }
       userConversations[chatId].details.direction = direction;
       userConversations[chatId].state = 'setting_alert_rate';
-      bot.editMessageText(`Notify when *${userState.details.fromCoin}/${userState.details.toCoin}* is ${direction} what rate?`, {
-        chat_id: chatId,
-        message_id: originalMessageId,
-        parse_mode: 'Markdown'
-      });
+      
+      const fromCoin = userState.details.fromCoin;
+      const toCoin = userState.details.toCoin || 'USDT';
+      const isUsdAlert = toCoin === 'USDT' || toCoin === 'USDC';
+      
+      // For USD alerts, show price in $ format
+      const priceLabel = isUsdAlert 
+        ? `Enter target price in USD (e.g., 45000 for $45,000):`
+        : `Enter the target rate for ${fromCoin}/${toCoin}:`;
+      
+      bot.editMessageText(
+        `🎯 *Alert: ${fromCoin}${isUsdAlert ? '/USD' : '/' + toCoin}*\n\n` +
+        `Direction: ${direction === 'above' ? '⬆️ Above' : '⬇️ Below'}\n\n` +
+        `${priceLabel}`,
+        {
+          chat_id: chatId,
+          message_id: originalMessageId,
+          parse_mode: 'Markdown'
+        }
+      );
       return;
     }
 
@@ -789,6 +1715,7 @@ Now select the coin you want to swap TO:`, {
       }
 
       const { fromCoin, toCoin, direction } = userState.details;
+      const isUsdAlert = toCoin === 'USDT' || toCoin === 'USDC';
 
       addAlert({
         chatId,
@@ -798,7 +1725,29 @@ Now select the coin you want to swap TO:`, {
         direction: direction
       });
 
-      bot.sendMessage(chatId, `✅ Alert created! I will notify you when *${fromCoin}/${toCoin}* goes ${direction} *${rate}*.`, { parse_mode: 'Markdown' });
+      // Format message nicely for USD alerts
+      const rateDisplay = isUsdAlert 
+        ? `$${rate.toLocaleString()}` 
+        : `${rate} ${toCoin}`;
+      const pairDisplay = isUsdAlert 
+        ? `${fromCoin}/USD` 
+        : `${fromCoin}/${toCoin}`;
+
+      bot.sendMessage(chatId, 
+        `✅ *Alert Created!*\n\n` +
+        `📊 Pair: ${pairDisplay}\n` +
+        `🎯 Trigger: ${direction === 'above' ? '⬆️ Above' : '⬇️ Below'} ${rateDisplay}\n\n` +
+        `I'll notify you when the price reaches your target!`, 
+        { 
+          parse_mode: 'Markdown',
+          reply_markup: {
+            inline_keyboard: [[
+              { text: '📋 View Alerts', callback_data: 'view_alerts' },
+              { text: '➕ New Alert', callback_data: 'new_alert' }
+            ]]
+          }
+        }
+      );
       delete userConversations[chatId];
       return;
     }
@@ -932,7 +1881,7 @@ Now select the coin you want to swap TO:`, {
     // State 3: Awaiting Refund Address
     if (userState && userState.state === 'awaiting_refund_address') {
       const refundAddress = msg.text!;
-      const { quoteId, settleAddress, fromCurrency } = userState.details;
+      const { quoteId, settleAddress, fromCurrency, toCurrency, fromCoin, toCoin, fromNetwork, toNetwork } = userState.details;
 
       let shiftParams: any = { quoteId, settleAddress };
 
@@ -949,9 +1898,46 @@ Now select the coin you want to swap TO:`, {
         bot.sendMessage(chatId, '✅ Got it. Creating your shift...');
         const shift = await createShift(shiftParams);
 
-        bot.sendMessage(chatId, `✨ Shift created! Please send exactly ${shift.depositAmount} ${shift.depositCoin.toUpperCase()} to the following address:
-\`${shift.depositAddress}\`
-I will notify you of any updates. You can type /cancel at any time before sending funds.`, { parse_mode: 'Markdown' });
+        // Record swap to database
+        try {
+          await recordShift(
+            chatId,
+            shift.id,
+            shift.depositCoin,
+            shift.settleCoin,
+            shift.depositAmount,
+            settleAddress,
+            {
+              fromNetwork: shift.depositNetwork,
+              toNetwork: shift.settleNetwork,
+              settleAmount: shift.settleAmount,
+              depositAddress: shift.depositAddress,
+              refundAddress: shiftParams.refundAddress,
+              rate: shift.rate
+            }
+          );
+          console.log(`✅ Swap recorded to database: ${shift.id}`);
+        } catch (dbError) {
+          console.error('Failed to record swap to database:', dbError);
+        }
+
+        // Generate QR code for deposit address
+        try {
+          const qrUri = formatCryptoURI(shift.depositCoin, shift.depositAddress, shift.depositAmount);
+          const qrBuffer = await generateQRCodeBuffer(qrUri);
+          
+          // Send QR code image
+          await bot.sendPhoto(chatId, qrBuffer, {
+            caption: `📱 *Scan to pay*\n\nSend exactly *${shift.depositAmount} ${shift.depositCoin.toUpperCase()}* to:\n\`${shift.depositAddress}\``,
+            parse_mode: 'Markdown'
+          });
+        } catch (qrError) {
+          console.error('Failed to generate QR code:', qrError);
+          // Fall back to text-only message
+          bot.sendMessage(chatId, `✨ Shift created! Please send exactly ${shift.depositAmount} ${shift.depositCoin.toUpperCase()} to:\n\`${shift.depositAddress}\``, { parse_mode: 'Markdown' });
+        }
+
+        bot.sendMessage(chatId, `🆔 Shift ID: \`${shift.id}\`\n\nI will notify you of any updates. Use /status to check anytime.\nType /cancel before sending funds to cancel.`, { parse_mode: 'Markdown' });
         
         userConversations[chatId].state = 'polling_status';
         userConversations[chatId].shiftId = shift.id;
@@ -964,6 +1950,14 @@ I will notify you of any updates. You can type /cancel at any time before sendin
           }
           try {
             const statusResponse = await pollShiftStatus(shift.id);
+            
+            // Update database with status
+            try {
+              await updateShiftStatus(shift.id, statusResponse.status, statusResponse.settleAmount);
+            } catch (dbError) {
+              console.error('Failed to update swap status in database:', dbError);
+            }
+
             if (statusResponse.status !== userConversations[chatId].lastStatus) {
               bot.sendMessage(chatId, `🔄 Swap Status Update: *${statusResponse.status}*`, { parse_mode: 'Markdown' });
               userConversations[chatId].lastStatus = statusResponse.status;
@@ -1125,6 +2119,14 @@ async function gracefulShutdown(signal: string) {
       } else {
         console.log('⚠️ Skipping connection close due to rate limit');
       }
+    }
+
+    // Disconnect from database
+    try {
+      await disconnectDatabase();
+      console.log('✅ Database disconnected');
+    } catch (dbErr) {
+      console.error('Error disconnecting database:', dbErr);
     }
     
     process.exit(0);
