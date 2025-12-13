@@ -524,48 +524,46 @@ function setupBotHandlers() {
     }
     
     const lang = getUserLanguage(chatId);
+    const firstName = msg.from?.first_name || 'there';
     
-    // New user onboarding flow
-    if (user.isNewUser) {
-      const firstName = msg.from?.first_name || 'there';
-      const onboardingMessage = `👋 *Welcome to NeuraXchange, ${firstName}!*
+    // Brief welcome message for all users
+    const welcomeMessage = `👋 *Welcome${user.isNewUser ? '' : ' back'}, ${firstName}!*
 
-I'm your AI-powered crypto swap assistant. Let me show you what I can do:
+🔄 *NeuraXchange* - Your AI-powered crypto swap assistant
 
-🔄 *Instant Swaps*
-Exchange between 100+ cryptocurrencies with the best rates from SideShift.
+Swap 100+ cryptocurrencies instantly with the best rates. Set alerts, automate trades with DCA & limit orders, all in one place.
 
-💡 *Key Features:*
-• Quick swaps: BTC, ETH, SOL, USDT, USDC & more
-• Real-time price alerts
-• Automated DCA orders
-• Limit orders that execute automatically
-• Multi-language support (🇺🇸 🇪🇸 🇫🇷 🇷🇺 🇨🇳)
+💡 _Type naturally: "Swap 0.1 ETH to USDT"_`;
 
-🚀 *Let's get started!*
-
-Choose an option below or type a swap like:
-"Swap 0.1 ETH to USDT"`;
-
-      await bot.sendMessage(chatId, onboardingMessage, { 
-        parse_mode: 'Markdown',
-        reply_markup: {
-          inline_keyboard: [
-            [
-              { text: '🔄 Start a Swap', callback_data: 'start_swap' },
-              { text: '🌐 Choose Language', callback_data: 'settings_language' }
-            ],
-            [
-              { text: '📚 View Commands', callback_data: 'show_help' },
-              { text: '🎁 Referral Program', callback_data: 'referral' }
-            ]
+    await bot.sendMessage(chatId, welcomeMessage, { 
+      parse_mode: 'Markdown',
+      reply_markup: {
+        inline_keyboard: [
+          [
+            { text: '🔄 Swap', callback_data: 'start_swap' },
+            { text: '💰 Price', callback_data: 'cmd_price' },
+            { text: '📊 Status', callback_data: 'cmd_status' }
+          ],
+          [
+            { text: '🔔 Alerts', callback_data: 'cmd_alerts' },
+            { text: '⭐ Favorites', callback_data: 'cmd_favorites' },
+            { text: '📜 History', callback_data: 'cmd_history' }
+          ],
+          [
+            { text: '📈 Limit Order', callback_data: 'new_limit_order' },
+            { text: '🔁 DCA', callback_data: 'new_dca_order' }
+          ],
+          [
+            { text: '📊 Analytics', callback_data: 'cmd_analytics' },
+            { text: '🎁 Referral', callback_data: 'referral' }
+          ],
+          [
+            { text: '🌐 Language', callback_data: 'settings_language' },
+            { text: '❓ Help', callback_data: 'show_help' }
           ]
-        }
-      });
-      return;
-    }
-    
-    bot.sendMessage(chatId, getHelpMessage(lang), { parse_mode: 'Markdown' });
+        ]
+      }
+    });
   });
 
   bot.onText(/\/help$/, (msg: Message) => {
@@ -1195,6 +1193,96 @@ ${etaText}${status.depositAddress ? `💳 Deposit Address:\n\`${status.depositAd
       const botUsername = (await bot.getMe()).username;
       const referralLink = `https://t.me/${botUsername}?start=ref_${code}`;
       bot.sendMessage(chatId, `📤 *Share your referral link:*\n\n\`${referralLink}\`\n\nShare this with friends to earn rewards when they swap!`, { parse_mode: 'Markdown' });
+      return;
+    }
+
+    // === Command button handlers (from /start menu) ===
+    if (data === 'cmd_price') {
+      bot.sendMessage(chatId, '💰 *Check Price*\n\nEnter a pair to check the rate:\n\nExample: `/price BTC USDT` or `/price ETH SOL`', { parse_mode: 'Markdown' });
+      return;
+    }
+
+    if (data === 'cmd_status') {
+      // Check recent swaps from history
+      const swaps = await getUserHistory(chatId, 5);
+      if (swaps.length === 0) {
+        bot.sendMessage(chatId, "📭 No recent swaps found.\n\nUse `/status <shift_id>` to check a specific swap, or tap 🔄 Swap to start a new one.", { parse_mode: 'Markdown' });
+        return;
+      }
+      const keyboard = swaps.map((swap: any) => [{
+        text: `${swap.fromCoin.toUpperCase()}→${swap.toCoin.toUpperCase()} (${swap.status})`,
+        callback_data: `check_status_${swap.shiftId}`
+      }]);
+      bot.sendMessage(chatId, "📋 *Your Recent Swaps*\n\nSelect a swap to check its status:", {
+        parse_mode: 'Markdown',
+        reply_markup: { inline_keyboard: keyboard }
+      });
+      return;
+    }
+
+    if (data === 'cmd_alerts') {
+      const alerts = await getUserAlerts(chatId);
+      if (!alerts || alerts.length === 0) {
+        bot.sendMessage(chatId, '🔔 *Price Alerts*\n\nNo active alerts. Create one to get notified when prices hit your target!', {
+          parse_mode: 'Markdown',
+          reply_markup: {
+            inline_keyboard: [[{ text: '➕ New Alert', callback_data: 'new_alert' }]]
+          }
+        });
+        return;
+      }
+      const alertList = alerts.map((a: any, i: number) => 
+        `${i + 1}. ${a.from.toUpperCase()}/${a.to.toUpperCase()} ${a.direction === 'above' ? '⬆️' : '⬇️'} ${a.targetRate}`
+      ).join('\n');
+      bot.sendMessage(chatId, `🔔 *Your Alerts*\n\n${alertList}`, {
+        parse_mode: 'Markdown',
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '➕ New Alert', callback_data: 'new_alert' }],
+            [{ text: '🗑️ Manage Alerts', callback_data: 'view_alerts' }]
+          ]
+        }
+      });
+      return;
+    }
+
+    if (data === 'cmd_favorites') {
+      const favorites = await getUserFavorites(chatId);
+      if (!favorites || favorites.length === 0) {
+        bot.sendMessage(chatId, '⭐ *Favorite Pairs*\n\nNo favorites yet! Complete a swap and add it to favorites for quick access.', { parse_mode: 'Markdown' });
+        return;
+      }
+      const keyboard = await formatFavoritesKeyboard(chatId);
+      bot.sendMessage(chatId, '⭐ *Your Favorite Pairs*\n\nSelect a pair to quick swap:', {
+        parse_mode: 'Markdown',
+        reply_markup: keyboard
+      });
+      return;
+    }
+
+    if (data === 'cmd_history') {
+      const history = await getUserHistory(chatId, 10);
+      if (!history || history.length === 0) {
+        bot.sendMessage(chatId, '📜 *Swap History*\n\nNo swap history yet. Start your first swap!', {
+          parse_mode: 'Markdown',
+          reply_markup: {
+            inline_keyboard: [[{ text: '🔄 Start Swap', callback_data: 'start_swap' }]]
+          }
+        });
+        return;
+      }
+      const formatted = formatSwapHistory(history);
+      bot.sendMessage(chatId, `📜 *Your Swap History*\n\n${formatted}`, { parse_mode: 'Markdown' });
+      return;
+    }
+
+    if (data === 'cmd_analytics') {
+      const stats = await getSwapStats(chatId);
+      if (!stats) {
+        bot.sendMessage(chatId, '📊 *Analytics*\n\nNo statistics yet. Complete some swaps to see your analytics!', { parse_mode: 'Markdown' });
+        return;
+      }
+      bot.sendMessage(chatId, formatSwapStats(stats), { parse_mode: 'Markdown' });
       return;
     }
 
