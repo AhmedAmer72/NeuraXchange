@@ -265,37 +265,1396 @@
           "type": "enum",
           "rules": [
             {
-              "option": "BTC",
+              "option": "apt",
               "texts": [
-                "btc",
+                "aptos",
+                "apt"
+              ]
+            },
+            {
+              "option": "eth",
+              "texts": [
+                "ethereum",
+                "eth"
+              ]
+            },
+            {
+              "option": "bonk",
+              "texts": [
+                "bonk",
+                "bonk"
+              ]
+            },
+            {
+              "option": "aero",
+              "texts": [
+                "aerodrome finance",
+                "aero"
+              ]
+            },
+            {
+              "option": "jasmy",
+              "texts": [
+                "jasmycoin",
+                "jasmy"
+              ]
+            },
+            {
+              "option": "icp",
+              "texts": [
+                "internet computer",
+                "icp"
+              ]
+            },
+            {
+              "option": "jto",
+              "texts": [
+                "jito",
+                "jto"
+              ]
+            },
+            {
+              "option": "jitosol",
+              "texts": [
+                "jito staked sol",
+                "jitosol"
+              ]
+            },
+            {
+              "option": "kaito",
+              "texts": [
+                "kaito",
+                "kaito"
+              ]
+            },
+            {
+              "option": "kmno",
+              "texts": [
+                "kamino",
+                "kmno"
+              ]
+            },
+            {
+              "option": "frax",
+              "texts": [
+                "frax",
+                "frax"
+              ]
+            },
+            {
+              "option": "fxs",
+              "texts": [
+                "frax shares",
+                "fxs"
+              ]
+            },
+            {
+              "option": "fwog",
+              "texts": [
+                "fwog",
+                "fwog"
+              ]
+            },
+            {
+              "option": "gns",
+              "texts": [
+                "gains network",
+                "gns"
+              ]
+            },
+            {
+              "option": "gala",
+              "texts": [
+                "gala games",
+                "gala"
+              ]
+            },
+            {
+              "option": "gho",
+              "texts": [
+                "gho",
+                "gho"
+              ]
+            },
+            {
+              "option": "avax",
+              "texts": [
+                "avalanche",
+                "avax"
+              ]
+            },
+            {
+              "option": "ket",
+              "texts": [
+                "ket",
+                "ket"
+              ]
+            },
+            {
+              "option": "aixbt",
+              "texts": [
+                "aixbt by virtuals",
+                "aixbt"
+              ]
+            },
+            {
+              "option": "amp",
+              "texts": [
+                "amp",
+                "amp"
+              ]
+            },
+            {
+              "option": "ape",
+              "texts": [
+                "apecoin",
+                "ape"
+              ]
+            },
+            {
+              "option": "apu",
+              "texts": [
+                "apu apustaja",
+                "apu"
+              ]
+            },
+            {
+              "option": "arb",
+              "texts": [
+                "arb",
+                "arb"
+              ]
+            },
+            {
+              "option": "aster",
+              "texts": [
+                "aster",
+                "aster"
+              ]
+            },
+            {
+              "option": "susde",
+              "texts": [
+                "ethena staked usde",
+                "susde"
+              ]
+            },
+            {
+              "option": "ethfi",
+              "texts": [
+                "ether.fi",
+                "ethfi"
+              ]
+            },
+            {
+              "option": "euroc",
+              "texts": [
+                "euro coin",
+                "euroc"
+              ]
+            },
+            {
+              "option": "core",
+              "texts": [
+                "core",
+                "core"
+              ]
+            },
+            {
+              "option": "zro",
+              "texts": [
+                "layerzero",
+                "zro"
+              ]
+            },
+            {
+              "option": "ldo",
+              "texts": [
+                "lido",
+                "ldo"
+              ]
+            },
+            {
+              "option": "ltc",
+              "texts": [
+                "litecoin",
+                "ltc"
+              ]
+            },
+            {
+              "option": "lrc",
+              "texts": [
+                "loopring",
+                "lrc"
+              ]
+            },
+            {
+              "option": "magic",
+              "texts": [
+                "magic",
+                "magic"
+              ]
+            },
+            {
+              "option": "mim",
+              "texts": [
+                "magic internet money",
+                "mim"
+              ]
+            },
+            {
+              "option": "meth",
+              "texts": [
+                "mantle staked ether",
+                "meth"
+              ]
+            },
+            {
+              "option": "om",
+              "texts": [
+                "mantra",
+                "om"
+              ]
+            },
+            {
+              "option": "m",
+              "texts": [
+                "memecore",
+                "m"
+              ]
+            },
+            {
+              "option": "giga",
+              "texts": [
+                "gigachad",
+                "giga"
+              ]
+            },
+            {
+              "option": "usdg",
+              "texts": [
+                "global dollar",
+                "usdg"
+              ]
+            },
+            {
+              "option": "gmx",
+              "texts": [
+                "gmx",
+                "gmx"
+              ]
+            },
+            {
+              "option": "grass",
+              "texts": [
+                "grass",
+                "grass"
+              ]
+            },
+            {
+              "option": "ron",
+              "texts": [
+                "ronin network",
+                "ron"
+              ]
+            },
+            {
+              "option": "shib",
+              "texts": [
+                "shiba inu",
+                "shib"
+              ]
+            },
+            {
+              "option": "xai",
+              "texts": [
+                "sideshift token",
+                "xai"
+              ]
+            },
+            {
+              "option": "sky",
+              "texts": [
+                "sky",
+                "sky"
+              ]
+            },
+            {
+              "option": "spx",
+              "texts": [
+                "spx6900",
+                "spx"
+              ]
+            },
+            {
+              "option": "steth",
+              "texts": [
+                "lido staked ether",
+                "steth"
+              ]
+            },
+            {
+              "option": "gmt",
+              "texts": [
+                "gmt",
+                "gmt"
+              ]
+            },
+            {
+              "option": "stonks",
+              "texts": [
+                "stonks",
+                "stonks"
+              ]
+            },
+            {
+              "option": "susds",
+              "texts": [
+                "susds",
+                "susds"
+              ]
+            },
+            {
+              "option": "sushi",
+              "texts": [
+                "sushi",
+                "sushi"
+              ]
+            },
+            {
+              "option": "swarms",
+              "texts": [
+                "swarms",
+                "swarms"
+              ]
+            },
+            {
+              "option": "btc",
+              "texts": [
+                "bitcoin",
+                "btc"
+              ]
+            },
+            {
+              "option": "mew",
+              "texts": [
+                "cat in a dogs world",
+                "mew"
+              ]
+            },
+            {
+              "option": "tia",
+              "texts": [
+                "celestia",
+                "tia"
+              ]
+            },
+            {
+              "option": "link",
+              "texts": [
+                "chainlink",
+                "link"
+              ]
+            },
+            {
+              "option": "coai",
+              "texts": [
+                "chainopera ai",
+                "coai"
+              ]
+            },
+            {
+              "option": "chz",
+              "texts": [
+                "chilliz",
+                "chz"
+              ]
+            },
+            {
+              "option": "cbbtc",
+              "texts": [
+                "coinbase wrapped btc",
+                "cbbtc"
+              ]
+            },
+            {
+              "option": "cbeth",
+              "texts": [
+                "coinbase wrapped staked eth",
+                "cbeth"
+              ]
+            },
+            {
+              "option": "met",
+              "texts": [
+                "meteora",
+                "met"
+              ]
+            },
+            {
+              "option": "collat",
+              "texts": [
+                "collaterize",
+                "collat"
+              ]
+            },
+            {
+              "option": "metis",
+              "texts": [
+                "metis",
+                "metis"
+              ]
+            },
+            {
+              "option": "mog",
+              "texts": [
+                "mog coin",
+                "mog"
+              ]
+            },
+            {
+              "option": "usde",
+              "texts": [
+                "ethena usde",
+                "usde"
+              ]
+            },
+            {
+              "option": "hbar",
+              "texts": [
+                "hedera",
+                "hbar"
+              ]
+            },
+            {
+              "option": "joe",
+              "texts": [
+                "trader joe",
+                "joe"
+              ]
+            },
+            {
+              "option": "jup",
+              "texts": [
+                "jupiter",
+                "jup"
+              ]
+            },
+            {
+              "option": "avnt",
+              "texts": [
+                "avantis",
+                "avnt"
+              ]
+            },
+            {
+              "option": "moodeng",
+              "texts": [
+                "moo deng",
+                "moodeng"
+              ]
+            },
+            {
+              "option": "morpho",
+              "texts": [
+                "morpho",
+                "morpho"
+              ]
+            },
+            {
+              "option": "msol",
+              "texts": [
+                "marinade staked sol",
+                "msol"
+              ]
+            },
+            {
+              "option": "myx",
+              "texts": [
+                "myx finance",
+                "myx"
+              ]
+            },
+            {
+              "option": "paxg",
+              "texts": [
+                "paxos gold",
+                "paxg"
+              ]
+            },
+            {
+              "option": "usdp",
+              "texts": [
+                "pax dollar",
+                "usdp"
+              ]
+            },
+            {
+              "option": "pyusd",
+              "texts": [
+                "paypal usd",
+                "pyusd"
+              ]
+            },
+            {
+              "option": "pendle",
+              "texts": [
+                "pendle",
+                "pendle"
+              ]
+            },
+            {
+              "option": "pepe",
+              "texts": [
+                "pepe",
+                "pepe"
+              ]
+            },
+            {
+              "option": "xpl",
+              "texts": [
+                "plasma",
+                "xpl"
+              ]
+            },
+            {
+              "option": "dot",
+              "texts": [
+                "polkadot",
+                "dot"
+              ]
+            },
+            {
+              "option": "pol",
+              "texts": [
+                "polygon ecosystem token",
+                "pol"
+              ]
+            },
+            {
+              "option": "rpl",
+              "texts": [
+                "rocketpool",
+                "rpl"
+              ]
+            },
+            {
+              "option": "axs",
+              "texts": [
+                "axie infinity",
+                "axs"
+              ]
+            },
+            {
+              "option": "brett",
+              "texts": [
+                "brett",
+                "brett"
+              ]
+            },
+            {
+              "option": "bat",
+              "texts": [
+                "basic attention token",
+                "bat"
+              ]
+            },
+            {
+              "option": "savax",
+              "texts": [
+                "staked avax",
+                "savax"
+              ]
+            },
+            {
+              "option": "bera",
+              "texts": [
+                "berachain",
+                "bera"
+              ]
+            },
+            {
+              "option": "bnb",
+              "texts": [
+                "binance coin",
+                "bnb"
+              ]
+            },
+            {
+              "option": "bch",
+              "texts": [
+                "bitcoin cash",
+                "bch"
+              ]
+            },
+            {
+              "option": "popcat",
+              "texts": [
+                "popcat",
+                "popcat"
+              ]
+            },
+            {
+              "option": "pengu",
+              "texts": [
+                "pudgy penguins",
+                "pengu"
+              ]
+            },
+            {
+              "option": "pump",
+              "texts": [
+                "pump.fun",
+                "pump"
+              ]
+            },
+            {
+              "option": "qnt",
+              "texts": [
+                "quant",
+                "qnt"
+              ]
+            },
+            {
+              "option": "ray",
+              "texts": [
+                "raydium",
+                "ray"
+              ]
+            },
+            {
+              "option": "rndr",
+              "texts": [
+                "render",
+                "rndr"
+              ]
+            },
+            {
+              "option": "usr",
+              "texts": [
+                "resolv usr",
+                "usr"
+              ]
+            },
+            {
+              "option": "fartcoin",
+              "texts": [
+                "fartcoin",
+                "fartcoin"
+              ]
+            },
+            {
+              "option": "fet",
+              "texts": [
+                "artificial superintelligence alliance",
+                "fet"
+              ]
+            },
+            {
+              "option": "usdt",
+              "texts": [
+                "tether",
+                "usdt"
+              ]
+            },
+            {
+              "option": "fdusd",
+              "texts": [
+                "first digital usd",
+                "fdusd"
+              ]
+            },
+            {
+              "option": "floki",
+              "texts": [
+                "floki",
+                "floki"
+              ]
+            },
+            {
+              "option": "griffain",
+              "texts": [
+                "griffain",
+                "griffain"
+              ]
+            },
+            {
+              "option": "bitcoin",
+              "texts": [
+                "harrypotterobamasonic10inu",
                 "bitcoin"
               ]
             },
             {
-              "option": "ETH",
+              "option": "snx",
               "texts": [
-                "eth",
-                "ethereum"
+                "synthetix",
+                "snx"
               ]
             },
             {
-              "option": "SOL",
+              "option": "hnt",
               "texts": [
-                "sol",
-                "solana"
+                "helium",
+                "hnt"
               ]
             },
             {
-              "option": "USDT",
+              "option": "hex",
               "texts": [
-                "usdt",
-                "tether"
+                "hex",
+                "hex"
               ]
             },
             {
-              "option": "USDC",
+              "option": "reth",
               "texts": [
+                "rocket pool eth",
+                "reth"
+              ]
+            },
+            {
+              "option": "rlb",
+              "texts": [
+                "rollbit",
+                "rlb"
+              ]
+            },
+            {
+              "option": "rbtc",
+              "texts": [
+                "rootstock btc",
+                "rbtc"
+              ]
+            },
+            {
+              "option": "fox",
+              "texts": [
+                "shapeshift",
+                "fox"
+              ]
+            },
+            {
+              "option": "sweat",
+              "texts": [
+                "sweat economy",
+                "sweat"
+              ]
+            },
+            {
+              "option": "syn",
+              "texts": [
+                "synapse",
+                "syn"
+              ]
+            },
+            {
+              "option": "syrup",
+              "texts": [
+                "maple finance",
+                "syrup"
+              ]
+            },
+            {
+              "option": "tbtc",
+              "texts": [
+                "tbtc",
+                "tbtc"
+              ]
+            },
+            {
+              "option": "bit",
+              "texts": [
+                "bitdao",
+                "bit"
+              ]
+            },
+            {
+              "option": "tao",
+              "texts": [
+                "bittensor",
+                "tao"
+              ]
+            },
+            {
+              "option": "bsol",
+              "texts": [
+                "blazestake staked sol",
+                "bsol"
+              ]
+            },
+            {
+              "option": "stx",
+              "texts": [
+                "stacks",
+                "stx"
+              ]
+            },
+            {
+              "option": "blur",
+              "texts": [
+                "blur",
+                "blur"
+              ]
+            },
+            {
+              "option": "bone",
+              "texts": [
+                "bone",
+                "bone"
+              ]
+            },
+            {
+              "option": "bome",
+              "texts": [
+                "book of meme",
+                "bome"
+              ]
+            },
+            {
+              "option": "usdbc",
+              "texts": [
+                "usdbc",
+                "usdbc"
+              ]
+            },
+            {
+              "option": "comp",
+              "texts": [
+                "compound",
+                "comp"
+              ]
+            },
+            {
+              "option": "coq",
+              "texts": [
+                "coq inu",
+                "coq"
+              ]
+            },
+            {
+              "option": "atom",
+              "texts": [
+                "cosmos",
+                "atom"
+              ]
+            },
+            {
+              "option": "tnsr",
+              "texts": [
+                "tensor",
+                "tnsr"
+              ]
+            },
+            {
+              "option": "xaut",
+              "texts": [
+                "tether gold",
+                "xaut"
+              ]
+            },
+            {
+              "option": "grt",
+              "texts": [
+                "the graph",
+                "grt"
+              ]
+            },
+            {
+              "option": "hwusd",
+              "texts": [
+                "hyperwave usd",
+                "hwusd"
+              ]
+            },
+            {
+              "option": "hype",
+              "texts": [
+                "hyperliquid",
+                "hype"
+              ]
+            },
+            {
+              "option": "hwhype",
+              "texts": [
+                "hyperwave hype",
+                "hwhype"
+              ]
+            },
+            {
+              "option": "sol",
+              "texts": [
+                "solana",
+                "sol"
+              ]
+            },
+            {
+              "option": "sand",
+              "texts": [
+                "the sandbox",
+                "sand"
+              ]
+            },
+            {
+              "option": "cro",
+              "texts": [
+                "cronos",
+                "cro"
+              ]
+            },
+            {
+              "option": "crv",
+              "texts": [
+                "curve dao",
+                "crv"
+              ]
+            },
+            {
+              "option": "dai",
+              "texts": [
+                "dai",
+                "dai"
+              ]
+            },
+            {
+              "option": "toshi",
+              "texts": [
+                "toshi",
+                "toshi"
+              ]
+            },
+            {
+              "option": "tusd",
+              "texts": [
+                "trueusd",
+                "tusd"
+              ]
+            },
+            {
+              "option": "ilv",
+              "texts": [
+                "illuvium",
+                "ilv"
+              ]
+            },
+            {
+              "option": "imx",
+              "texts": [
+                "immutable x",
+                "imx"
+              ]
+            },
+            {
+              "option": "inj",
+              "texts": [
+                "injective",
+                "inj"
+              ]
+            },
+            {
+              "option": "fluid",
+              "texts": [
+                "fluid",
+                "fluid"
+              ]
+            },
+            {
+              "option": "usdc",
+              "texts": [
+                "usdc",
                 "usdc"
+              ]
+            },
+            {
+              "option": "s",
+              "texts": [
+                "sonic",
+                "s"
+              ]
+            },
+            {
+              "option": "usds",
+              "texts": [
+                "usds",
+                "usds"
+              ]
+            },
+            {
+              "option": "usdt0",
+              "texts": [
+                "usdt0",
+                "usdt0"
+              ]
+            },
+            {
+              "option": "mplx",
+              "texts": [
+                "metaplex",
+                "mplx"
+              ]
+            },
+            {
+              "option": "mana",
+              "texts": [
+                "decentraland",
+                "mana"
+              ]
+            },
+            {
+              "option": "doge",
+              "texts": [
+                "dogecoin",
+                "doge"
+              ]
+            },
+            {
+              "option": "wif",
+              "texts": [
+                "dogwifhat",
+                "wif"
+              ]
+            },
+            {
+              "option": "2z",
+              "texts": [
+                "doublezero",
+                "2z"
+              ]
+            },
+            {
+              "option": "drift",
+              "texts": [
+                "drift protocol",
+                "drift"
+              ]
+            },
+            {
+              "option": "xec",
+              "texts": [
+                "ecash",
+                "xec"
+              ]
+            },
+            {
+              "option": "mon",
+              "texts": [
+                "monad",
+                "mon"
+              ]
+            },
+            {
+              "option": "useless",
+              "texts": [
+                "useless",
+                "useless"
+              ]
+            },
+            {
+              "option": "vvv",
+              "texts": [
+                "venice token",
+                "vvv"
+              ]
+            },
+            {
+              "option": "verse",
+              "texts": [
+                "verse",
+                "verse"
+              ]
+            },
+            {
+              "option": "weth",
+              "texts": [
+                "wrapped ether",
+                "weth"
+              ]
+            },
+            {
+              "option": "woo",
+              "texts": [
+                "woo network",
+                "woo"
+              ]
+            },
+            {
+              "option": "wld",
+              "texts": [
+                "worldcoin",
+                "wld"
+              ]
+            },
+            {
+              "option": "wlfi",
+              "texts": [
+                "world liberty financial",
+                "wlfi"
+              ]
+            },
+            {
+              "option": "wavax",
+              "texts": [
+                "wrapped avax",
+                "wavax"
+              ]
+            },
+            {
+              "option": "wbeth",
+              "texts": [
+                "wrapped beacon eth",
+                "wbeth"
+              ]
+            },
+            {
+              "option": "wbtc",
+              "texts": [
+                "wbtc",
+                "wbtc"
+              ]
+            },
+            {
+              "option": "neiro",
+              "texts": [
+                "neiro",
+                "neiro"
+              ]
+            },
+            {
+              "option": "trump",
+              "texts": [
+                "trump",
+                "trump"
+              ]
+            },
+            {
+              "option": "ondo",
+              "texts": [
+                "ondo",
+                "ondo"
+              ]
+            },
+            {
+              "option": "op",
+              "texts": [
+                "optimism",
+                "op"
+              ]
+            },
+            {
+              "option": "orca",
+              "texts": [
+                "orca",
+                "orca"
+              ]
+            },
+            {
+              "option": "cake",
+              "texts": [
+                "pancake swap",
+                "cake"
+              ]
+            },
+            {
+              "option": "prime",
+              "texts": [
+                "echelon prime",
+                "prime"
+              ]
+            },
+            {
+              "option": "eigen",
+              "texts": [
+                "eigencloud",
+                "eigen"
+              ]
+            },
+            {
+              "option": "ena",
+              "texts": [
+                "ethena",
+                "ena"
+              ]
+            },
+            {
+              "option": "ton",
+              "texts": [
+                "toncoin",
+                "ton"
+              ]
+            },
+            {
+              "option": "turbo",
+              "texts": [
+                "turbo",
+                "turbo"
+              ]
+            },
+            {
+              "option": "uni",
+              "texts": [
+                "uniswap",
+                "uni"
+              ]
+            },
+            {
+              "option": "weeth",
+              "texts": [
+                "wrapped eeth",
+                "weeth"
+              ]
+            },
+            {
+              "option": "whype",
+              "texts": [
+                "wrapped hype",
+                "whype"
+              ]
+            },
+            {
+              "option": "yfi",
+              "texts": [
+                "yearn.finance",
+                "yfi"
+              ]
+            },
+            {
+              "option": "sai",
+              "texts": [
+                "legacy sideshift token",
+                "sai"
+              ]
+            },
+            {
+              "option": "algo",
+              "texts": [
+                "algorand",
+                "algo"
+              ]
+            },
+            {
+              "option": "ada",
+              "texts": [
+                "ada",
+                "ada"
+              ]
+            },
+            {
+              "option": "xrp",
+              "texts": [
+                "xrp",
+                "xrp"
+              ]
+            },
+            {
+              "option": "1inch",
+              "texts": [
+                "1inch token",
+                "1inch"
+              ]
+            },
+            {
+              "option": "aave",
+              "texts": [
+                "aave",
+                "aave"
+              ]
+            },
+            {
+              "option": "wen",
+              "texts": [
+                "wen",
+                "wen"
+              ]
+            },
+            {
+              "option": "dash",
+              "texts": [
+                "dash",
+                "dash"
+              ]
+            },
+            {
+              "option": "sui",
+              "texts": [
+                "sui",
+                "sui"
+              ]
+            },
+            {
+              "option": "virtual",
+              "texts": [
+                "virtuals protocol",
+                "virtual"
+              ]
+            },
+            {
+              "option": "wbnb",
+              "texts": [
+                "wrapped bnb",
+                "wbnb"
+              ]
+            },
+            {
+              "option": "wsol",
+              "texts": [
+                "wrapped sol",
+                "wsol"
+              ]
+            },
+            {
+              "option": "trx",
+              "texts": [
+                "tron",
+                "trx"
+              ]
+            },
+            {
+              "option": "mnt",
+              "texts": [
+                "mantle",
+                "mnt"
+              ]
+            },
+            {
+              "option": "sei",
+              "texts": [
+                "sei",
+                "sei"
+              ]
+            },
+            {
+              "option": "launchcoin",
+              "texts": [
+                "launch coin on believe",
+                "launchcoin"
+              ]
+            },
+            {
+              "option": "btc.b",
+              "texts": [
+                "btc.b",
+                "btc.b"
+              ]
+            },
+            {
+              "option": "linea",
+              "texts": [
+                "linea",
+                "linea"
+              ]
+            },
+            {
+              "option": "near",
+              "texts": [
+                "near",
+                "near"
+              ]
+            },
+            {
+              "option": "xlm",
+              "texts": [
+                "stellar lumens",
+                "xlm"
               ]
             }
           ]
@@ -305,24 +1664,291 @@
           "type": "enum",
           "rules": [
             {
+              "option": "aptos",
+              "texts": [
+                "aptos"
+              ]
+            },
+            {
+              "option": "base",
+              "texts": [
+                "base"
+              ]
+            },
+            {
+              "option": "scroll",
+              "texts": [
+                "scroll"
+              ]
+            },
+            {
+              "option": "zksyncera",
+              "texts": [
+                "zksyncera"
+              ]
+            },
+            {
               "option": "arbitrum",
               "texts": [
-                "arbitrum",
-                "arb"
+                "arbitrum"
+              ]
+            },
+            {
+              "option": "blast",
+              "texts": [
+                "blast"
               ]
             },
             {
               "option": "optimism",
               "texts": [
-                "optimism",
-                "op"
+                "optimism"
+              ]
+            },
+            {
+              "option": "ethereum",
+              "texts": [
+                "ethereum"
+              ]
+            },
+            {
+              "option": "solana",
+              "texts": [
+                "solana"
+              ]
+            },
+            {
+              "option": "icp",
+              "texts": [
+                "icp"
               ]
             },
             {
               "option": "polygon",
               "texts": [
-                "polygon",
-                "matic"
+                "polygon"
+              ]
+            },
+            {
+              "option": "avax",
+              "texts": [
+                "avax"
+              ]
+            },
+            {
+              "option": "bsc",
+              "texts": [
+                "bsc"
+              ]
+            },
+            {
+              "option": "core",
+              "texts": [
+                "core"
+              ]
+            },
+            {
+              "option": "litecoin",
+              "texts": [
+                "litecoin"
+              ]
+            },
+            {
+              "option": "ronin",
+              "texts": [
+                "ronin"
+              ]
+            },
+            {
+              "option": "internal",
+              "texts": [
+                "internal"
+              ]
+            },
+            {
+              "option": "liquid",
+              "texts": [
+                "liquid"
+              ]
+            },
+            {
+              "option": "bitcoin",
+              "texts": [
+                "bitcoin"
+              ]
+            },
+            {
+              "option": "celestia",
+              "texts": [
+                "celestia"
+              ]
+            },
+            {
+              "option": "hedera",
+              "texts": [
+                "hedera"
+              ]
+            },
+            {
+              "option": "plasma",
+              "texts": [
+                "plasma"
+              ]
+            },
+            {
+              "option": "polkadot",
+              "texts": [
+                "polkadot"
+              ]
+            },
+            {
+              "option": "berachain",
+              "texts": [
+                "berachain"
+              ]
+            },
+            {
+              "option": "bitcoincash",
+              "texts": [
+                "bitcoincash"
+              ]
+            },
+            {
+              "option": "fetch",
+              "texts": [
+                "fetch"
+              ]
+            },
+            {
+              "option": "ton",
+              "texts": [
+                "ton"
+              ]
+            },
+            {
+              "option": "tron",
+              "texts": [
+                "tron"
+              ]
+            },
+            {
+              "option": "rootstock",
+              "texts": [
+                "rootstock"
+              ]
+            },
+            {
+              "option": "bittensor",
+              "texts": [
+                "bittensor"
+              ]
+            },
+            {
+              "option": "stacks",
+              "texts": [
+                "stacks"
+              ]
+            },
+            {
+              "option": "cosmos",
+              "texts": [
+                "cosmos"
+              ]
+            },
+            {
+              "option": "hyperevm",
+              "texts": [
+                "hyperevm"
+              ]
+            },
+            {
+              "option": "cronos",
+              "texts": [
+                "cronos"
+              ]
+            },
+            {
+              "option": "inj",
+              "texts": [
+                "inj"
+              ]
+            },
+            {
+              "option": "sui",
+              "texts": [
+                "sui"
+              ]
+            },
+            {
+              "option": "sonic",
+              "texts": [
+                "sonic"
+              ]
+            },
+            {
+              "option": "stellar",
+              "texts": [
+                "stellar"
+              ]
+            },
+            {
+              "option": "algorand",
+              "texts": [
+                "algorand"
+              ]
+            },
+            {
+              "option": "doge",
+              "texts": [
+                "doge"
+              ]
+            },
+            {
+              "option": "xec",
+              "texts": [
+                "xec"
+              ]
+            },
+            {
+              "option": "monad",
+              "texts": [
+                "monad"
+              ]
+            },
+            {
+              "option": "cardano",
+              "texts": [
+                "cardano"
+              ]
+            },
+            {
+              "option": "ripple",
+              "texts": [
+                "ripple"
+              ]
+            },
+            {
+              "option": "dash",
+              "texts": [
+                "dash"
+              ]
+            },
+            {
+              "option": "mantle",
+              "texts": [
+                "mantle"
+              ]
+            },
+            {
+              "option": "seievm",
+              "texts": [
+                "seievm"
+              ]
+            },
+            {
+              "option": "near",
+              "texts": [
+                "near"
               ]
             }
           ]
