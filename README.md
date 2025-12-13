@@ -3,6 +3,11 @@
 An **AI-powered Telegram bot** for seamless, conversational crypto swaps using the **SideShift API**.  
 Built for the **SideShift WaveHack Buildathon** 🏗️
 
+## 🌐 Live Demo
+
+- **Telegram Bot**: [@NeuraXchange_bot](https://t.me/NeuraXchange_bot)
+- **Web Dashboard**: [neura-xchange.vercel.app](https://neura-xchange.vercel.app)
+
 ---
 
 ## 🚀 About The Project
@@ -53,17 +58,40 @@ Examples:
 /price btc to eth
 /price eth (arbitrum) to sol
 
+---
+
+### 🖥️ Web Dashboard
+A beautiful **cyberpunk-themed web dashboard** to manage your trading activity:
+- **Swap History** - View all your past transactions
+- **Price Alerts** - Set and manage price notifications
+- **DCA Orders** - Configure dollar-cost averaging strategies
+- **Limit Orders** - Set buy/sell orders at target prices
+- **Favorite Pairs** - Quick access to frequently traded pairs
+- **Referral Program** - Share your referral code and earn rewards
+- **Settings** - Customize slippage, notifications, and preferences
+
+Access the dashboard at [neura-xchange.vercel.app](https://neura-xchange.vercel.app) using your Telegram Chat ID.
 
 ---
 
 ## 🛠️ Built With
 
+### Telegram Bot
 - [Node.js](https://nodejs.org/)
 - [TypeScript](https://www.typescriptlang.org/)
 - [node-telegram-bot-api](https://github.com/yagop/node-telegram-bot-api)
 - [node-nlp](https://github.com/axa-group/nlp.js)
 - [Axios](https://axios-http.com/)
 - [SideShift API](https://docs.sideshift.ai/)
+- [Prisma](https://www.prisma.io/) + PostgreSQL
+
+### Web Dashboard
+- [Next.js 16](https://nextjs.org/) with Turbopack
+- [React 19](https://react.dev/)
+- [Tailwind CSS](https://tailwindcss.com/)
+- [Lucide React](https://lucide.dev/) icons
+- [Prisma](https://www.prisma.io/) (shared database)
+- Deployed on [Vercel](https://vercel.com/)
 
 ---
 
