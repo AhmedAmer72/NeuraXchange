@@ -533,6 +533,9 @@ function setupBotHandlers() {
 
 Swap 100+ cryptocurrencies instantly with the best rates. Set alerts, automate trades with DCA & limit orders, all in one place.
 
+🆔 *Your Chat ID:* \`${chatId}\`
+_Use this to access your web dashboard_
+
 💡 _Type naturally: "Swap 0.1 ETH to USDT"_`;
 
     await bot.sendMessage(chatId, welcomeMessage, { 
