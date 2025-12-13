@@ -13,11 +13,20 @@ if (process.env.NODE_ENV !== 'production') {
 
 // User operations
 export async function getOrCreateUser(chatId: number, username?: string, firstName?: string, lastName?: string) {
-  return prisma.user.upsert({
+  // Check if user exists first to determine if they're new
+  const existingUser = await prisma.user.findUnique({
+    where: { chatId: BigInt(chatId) }
+  });
+  
+  const isNewUser = !existingUser;
+  
+  const user = await prisma.user.upsert({
     where: { chatId: BigInt(chatId) },
     update: { username, firstName, lastName },
     create: { chatId: BigInt(chatId), username, firstName, lastName }
   });
+  
+  return { ...user, isNewUser };
 }
 
 export async function getUserByChatId(chatId: number) {

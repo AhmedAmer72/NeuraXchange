@@ -36,6 +36,10 @@ import {
   clearAllConversations, startSwapFlow, hasActiveConversation, UserConversation 
 } from './conversation';
 
+// Validation and status helpers
+import { validateSwapAmount, validateAddress, formatValidationError, ValidationResult } from './validation';
+import { formatCountdown, formatEnhancedStatus, formatStatusNotification, getStatusActionButtons, getNetworkETA, getQuoteCountdown } from './statusHelper';
+
 dotenv.config();
 
 const token = process.env.TELEGRAM_BOT_TOKEN;
@@ -495,7 +499,7 @@ function setupBotHandlers() {
     return messages[lang] || messages.en;
   }
 
-  // /start command with referral support
+  // /start command with referral support and onboarding
   bot.onText(/\/start(?:\s+(.+))?/, async (msg: Message, match) => {
     const chatId = msg.chat.id;
     log.userCommand(chatId, '/start');
@@ -520,6 +524,47 @@ function setupBotHandlers() {
     }
     
     const lang = getUserLanguage(chatId);
+    
+    // New user onboarding flow
+    if (user.isNewUser) {
+      const firstName = msg.from?.first_name || 'there';
+      const onboardingMessage = `👋 *Welcome to NeuraXchange, ${firstName}!*
+
+I'm your AI-powered crypto swap assistant. Let me show you what I can do:
+
+🔄 *Instant Swaps*
+Exchange between 100+ cryptocurrencies with the best rates from SideShift.
+
+💡 *Key Features:*
+• Quick swaps: BTC, ETH, SOL, USDT, USDC & more
+• Real-time price alerts
+• Automated DCA orders
+• Limit orders that execute automatically
+• Multi-language support (🇺🇸 🇪🇸 🇫🇷 🇷🇺 🇨🇳)
+
+🚀 *Let's get started!*
+
+Choose an option below or type a swap like:
+"Swap 0.1 ETH to USDT"`;
+
+      await bot.sendMessage(chatId, onboardingMessage, { 
+        parse_mode: 'Markdown',
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: '🔄 Start a Swap', callback_data: 'start_swap' },
+              { text: '🌐 Choose Language', callback_data: 'settings_language' }
+            ],
+            [
+              { text: '📚 View Commands', callback_data: 'show_help' },
+              { text: '🎁 Referral Program', callback_data: 'referral' }
+            ]
+          ]
+        }
+      });
+      return;
+    }
+    
     bot.sendMessage(chatId, getHelpMessage(lang), { parse_mode: 'Markdown' });
   });
 
@@ -813,11 +858,11 @@ function setupBotHandlers() {
     }
   });
 
-  // Helper function to format status message
+  // Helper function to format status message with explorer links
   function formatStatusMessage(status: any): string {
     const statusEmoji: { [key: string]: string } = {
       'pending': '⏳',
-      'waiting': '⏳',
+      'waiting': '📥',
       'processing': '🔄',
       'settling': '📤',
       'complete': '✅',
@@ -827,17 +872,64 @@ function setupBotHandlers() {
     };
 
     const emoji = statusEmoji[status.status] || '❓';
+    
+    // Build status description
+    const statusDescriptions: { [key: string]: string } = {
+      'pending': 'Waiting to start...',
+      'waiting': 'Waiting for your deposit',
+      'processing': 'Processing your swap...',
+      'settling': 'Sending funds to your wallet',
+      'complete': 'Swap completed! 🎉',
+      'refunded': 'Funds have been refunded',
+      'expired': 'This swap has expired',
+      'rejected': 'This swap was rejected'
+    };
+    
+    const description = statusDescriptions[status.status] || '';
 
-    return `${emoji} *Swap Status*
+    // Calculate ETA for processing states
+    let etaText = '';
+    if (['processing', 'settling'].includes(status.status) && status.settleNetwork) {
+      const eta = getNetworkETA(status.settleNetwork);
+      etaText = `⏱️ *ETA:* ${eta.minMinutes}-${eta.maxMinutes} minutes\n`;
+    }
+
+    // Build explorer links
+    let explorerLinks = '';
+    if (status.depositHash && status.depositNetwork) {
+      const txUrl = getExplorerUrl(status.depositNetwork, 'tx', status.depositHash);
+      if (txUrl) {
+        explorerLinks += `🔗 [View Deposit TX](${txUrl})\n`;
+      }
+    }
+    if (status.settleHash && status.settleNetwork) {
+      const txUrl = getExplorerUrl(status.settleNetwork, 'tx', status.settleHash);
+      if (txUrl) {
+        explorerLinks += `🔗 [View Settlement TX](${txUrl})\n`;
+      }
+    }
+    
+    // Build progress bar for processing states
+    let progressBar = '';
+    if (['waiting', 'processing', 'settling', 'complete'].includes(status.status)) {
+      const stages = ['waiting', 'processing', 'settling', 'complete'];
+      const currentIndex = stages.indexOf(status.status);
+      const filled = '▓';
+      const empty = '░';
+      const progress = stages.map((_, i) => i <= currentIndex ? filled : empty).join('');
+      progressBar = `\n📊 Progress: ${progress} ${Math.round((currentIndex + 1) / stages.length * 100)}%`;
+    }
+
+    return `${emoji} *Swap Status: ${status.status.charAt(0).toUpperCase() + status.status.slice(1)}*
+${description}
 
 🆔 ID: \`${status.id}\`
-📊 Status: *${status.status}*
 
-📥 Deposit: ${status.depositAmount || 'N/A'} ${status.depositCoin?.toUpperCase() || ''}
-📤 Receive: ${status.settleAmount || 'N/A'} ${status.settleCoin?.toUpperCase() || ''}
+📥 Deposit: \`${status.depositAmount || 'N/A'}\` ${status.depositCoin?.toUpperCase() || ''}
+📤 Receive: \`${status.settleAmount || 'N/A'}\` ${status.settleCoin?.toUpperCase() || ''}
 
-${status.depositAddress ? `💳 Deposit Address:\n\`${status.depositAddress}\`\n` : ''}
-${status.settleAddress ? `📬 Settle Address:\n\`${status.settleAddress.substring(0, 20)}...\`\n` : ''}
+${etaText}${status.depositAddress ? `💳 Deposit Address:\n\`${status.depositAddress}\`\n` : ''}${status.settleAddress ? `📬 Settle Address:\n\`${status.settleAddress.substring(0, 20)}...\`\n` : ''}${explorerLinks}${progressBar}
+
 ⏱️ Created: ${new Date(status.createdAt).toLocaleString()}`;
   }
 
@@ -1043,6 +1135,68 @@ ${status.settleAddress ? `📬 Settle Address:\n\`${status.settleAddress.substri
     const originalMessageId = callbackQuery.message!.message_id;
     const data = callbackQuery.data;
     await bot.answerCallbackQuery(callbackQuery.id);
+
+    // === Onboarding button handlers ===
+    if (data === 'start_swap') {
+      const welcomeMessage = `Let's start your swap! 🔄\n\nChoose the coin you want to swap FROM:`;
+      const keyboard = [
+        [{ text: '💵 USDT', callback_data: 'from_USDT' }, { text: '💵 USDC', callback_data: 'from_USDC' }],
+        [{ text: '₿ BTC', callback_data: 'from_BTC' }, { text: 'Ξ ETH', callback_data: 'from_ETH' }],
+        [{ text: '◎ SOL', callback_data: 'from_SOL' }, { text: '◈ DAI', callback_data: 'from_DAI' }],
+        [{ text: '🔍 More coins...', callback_data: 'from_more' }]
+      ];
+      bot.sendMessage(chatId, welcomeMessage, {
+        reply_markup: { inline_keyboard: keyboard }
+      });
+      userConversations[chatId] = { state: 'selecting_from_coin', details: {} };
+      return;
+    }
+
+    if (data === 'show_help') {
+      const lang = getUserLanguage(chatId);
+      bot.sendMessage(chatId, getHelpMessage(lang), { parse_mode: 'Markdown' });
+      return;
+    }
+
+    if (data === 'settings_language') {
+      const keyboard = [
+        [{ text: '🇺🇸 English', callback_data: 'set_lang_en' }, { text: '🇪🇸 Español', callback_data: 'set_lang_es' }],
+        [{ text: '🇫🇷 Français', callback_data: 'set_lang_fr' }, { text: '🇷🇺 Русский', callback_data: 'set_lang_ru' }],
+        [{ text: '🇨🇳 中文', callback_data: 'set_lang_zh' }]
+      ];
+      bot.sendMessage(chatId, '🌐 Choose your preferred language:', {
+        reply_markup: { inline_keyboard: keyboard }
+      });
+      return;
+    }
+
+    if (data === 'referral') {
+      try {
+        const stats = await getReferralStats(chatId);
+        const botInfo = await bot.getMe();
+        const refInfo = formatReferralInfo(stats, botInfo.username || '');
+        bot.sendMessage(chatId, refInfo, {
+          parse_mode: 'Markdown',
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: '📤 Share Referral Link', callback_data: 'share_referral' }],
+              [{ text: '🏠 Back to Menu', callback_data: 'show_help' }]
+            ]
+          }
+        });
+      } catch (error) {
+        bot.sendMessage(chatId, '⚠️ Could not load referral information. Try /referral command.');
+      }
+      return;
+    }
+
+    if (data === 'share_referral') {
+      const code = await getReferralCode(chatId);
+      const botUsername = (await bot.getMe()).username;
+      const referralLink = `https://t.me/${botUsername}?start=ref_${code}`;
+      bot.sendMessage(chatId, `📤 *Share your referral link:*\n\n\`${referralLink}\`\n\nShare this with friends to earn rewards when they swap!`, { parse_mode: 'Markdown' });
+      return;
+    }
 
     // === NEW: Handle new_alert button ===
     if (data === 'new_alert') {
@@ -1256,6 +1410,32 @@ ${status.settleAddress ? `📬 Settle Address:\n\`${status.settleAddress.substri
         bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
       } catch (error) {
         bot.sendMessage(chatId, '⚠️ Could not fetch status for this swap.');
+      }
+      return;
+    }
+
+    // === NEW: Handle view_limits button (shows min/max for pair) ===
+    if (data && data.startsWith('view_limits_')) {
+      const parts = data.replace('view_limits_', '').split('_');
+      const [fromCoin, toCoin] = parts;
+      try {
+        const pairInfo = await getPairInfo(fromCoin, toCoin);
+        const limitMessage = `📊 *${fromCoin.toUpperCase()} → ${toCoin.toUpperCase()} Limits*\n\n` +
+          `📉 Minimum: \`${pairInfo.min}\` ${fromCoin.toUpperCase()}\n` +
+          `📈 Maximum: \`${pairInfo.max}\` ${fromCoin.toUpperCase()}\n\n` +
+          `💱 Current Rate: \`${pairInfo.rate}\`\n\n` +
+          `💡 _Enter an amount within these limits to proceed._`;
+        
+        bot.sendMessage(chatId, limitMessage, {
+          parse_mode: 'Markdown',
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: '🔁 Try Again', callback_data: 'back_amount' }]
+            ]
+          }
+        });
+      } catch (error) {
+        bot.sendMessage(chatId, '⚠️ Could not fetch pair limits. Please try again.');
       }
       return;
     }
@@ -2033,6 +2213,29 @@ Now select the coin you want to swap TO:`, {
     // Existing confirm/cancel logic
     if (data === 'confirm_swap') {
       if (userState && userState.state === 'awaiting_confirmation') {
+        // Check if quote has expired
+        if (userState.details.quoteExpiresAt) {
+          const { expired, formatted } = getQuoteCountdown(userState.details.quoteExpiresAt);
+          if (expired) {
+            bot.editMessageText(`⏰ *Quote Expired*\n\nThis quote has expired. Please get a new quote.`, { 
+              chat_id: chatId, 
+              message_id: originalMessageId,
+              parse_mode: 'Markdown'
+            });
+            bot.sendMessage(chatId, '🔄 Would you like to get a new quote?', {
+              reply_markup: {
+                inline_keyboard: [
+                  [
+                    { text: '🔁 Get New Quote', callback_data: 'back_amount' },
+                    { text: '❌ Cancel', callback_data: 'cancel_swap' }
+                  ]
+                ]
+              }
+            });
+            return;
+          }
+        }
+        
         bot.editMessageText(`✅ You confirmed the swap.`, { chat_id: chatId, message_id: originalMessageId });
         bot.sendMessage(chatId, `➡️ Great! Please provide the destination wallet address for your ${userState.details.toCurrency}.`);
         userConversations[chatId].state = 'awaiting_address';
@@ -2273,6 +2476,42 @@ Now select the coin you want to swap TO:`, {
       }
 
       const { fromCoin, fromNetwork, toCoin, toNetwork } = userState.details;
+      const lang = getUserLanguage(chatId);
+
+      // --- Min/Max Validation with slippage protection ---
+      try {
+        const validationResult = await validateSwapAmount(
+          fromCoin, 
+          toCoin, 
+          amount, 
+          fromNetwork, 
+          toNetwork
+        );
+
+        if (!validationResult.valid) {
+          const errorMessage = formatValidationError(validationResult);
+          bot.sendMessage(chatId, errorMessage, {
+            parse_mode: 'Markdown',
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  { text: '📊 View Limits', callback_data: `view_limits_${fromCoin}_${toCoin}` },
+                  { text: '🔁 Try Different Amount', callback_data: 'back_amount' }
+                ]
+              ]
+            }
+          });
+          return;
+        }
+
+        // Show warning if close to limits
+        if (validationResult.warning) {
+          bot.sendMessage(chatId, `⚠️ ${validationResult.warning}`);
+        }
+      } catch (validationError) {
+        // Continue without validation if it fails (fallback to API validation)
+        console.warn('Validation check failed, proceeding:', validationError);
+      }
 
       // --- Advanced: Show market trend and fee breakdown ---
       let trendMsg = '';
@@ -2302,20 +2541,25 @@ Now select the coin you want to swap TO:`, {
         });
 
         const rate = (parseFloat(quote.settleAmount) / parseFloat(quote.depositAmount)).toFixed(8);
+        
+        // Format countdown timer
+        const countdownText = formatCountdown(quote.expiresAt);
 
         const confirmationText =
-          `🤔 Please confirm your swap:\n\n` +
-          `From: ${quote.depositAmount} ${quote.depositCoin.toUpperCase()}` +
+          `🤔 *Please confirm your swap:*\n\n` +
+          `📤 From: \`${quote.depositAmount}\` ${quote.depositCoin.toUpperCase()}` +
           `${fromNetwork ? ` on ${fromNetwork}` : ''}\n` +
-          `To: ${quote.settleAmount} ${quote.settleCoin.toUpperCase()}` +
+          `📥 To: \`${quote.settleAmount}\` ${quote.settleCoin.toUpperCase()}` +
           `${toNetwork ? ` on ${toNetwork}` : ''}\n` +
-          `Rate: 1 ${quote.depositCoin.toUpperCase()} = ${rate} ${quote.settleCoin.toUpperCase()}` +
+          `💱 Rate: 1 ${quote.depositCoin.toUpperCase()} = ${rate} ${quote.settleCoin.toUpperCase()}\n\n` +
+          `${countdownText}` +
           trendMsg + feeMsg;
 
         userConversations[chatId] = {
           state: 'awaiting_confirmation',
           details: {
             quoteId: quote.id,
+            quoteExpiresAt: quote.expiresAt,
             toCurrency: quote.settleCoin.toUpperCase(),
             fromCurrency: quote.depositCoin.toUpperCase(),
             fromCoin,
@@ -2326,6 +2570,7 @@ Now select the coin you want to swap TO:`, {
         };
 
         bot.sendMessage(chatId, confirmationText, {
+          parse_mode: 'Markdown',
           reply_markup: {
             inline_keyboard: [
               [
